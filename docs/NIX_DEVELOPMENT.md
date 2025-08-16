@@ -1,14 +1,11 @@
-# jsonshiatsu NixOS Development Environment
+# jsonshiatsu NixOS Dev Flake
 
-This project includes a comprehensive NixOS development environment using Nix flakes.
+For the nix folks a dev shell
 
 ## Quick Start
 
-### Prerequisites
-- NixOS or Nix package manager with flakes enabled
-- Optional: `direnv` for automatic environment loading
 
-### Enter Development Environment
+### Enter Development 
 
 ```bash
 # Using flakes (recommended)
@@ -34,25 +31,7 @@ dev-scripts lint          # Run linting
 dev-scripts all-checks    # Run all quality checks
 ```
 
-## Available Commands
-
-| Command | Description |
-|---------|-------------|
-| `dev-scripts test` | Run all tests with coverage |
-| `dev-scripts test-fast` | Run unit tests only |
-| `dev-scripts test-integration` | Run integration tests only |
-| `dev-scripts format` | Format code with black and isort |
-| `dev-scripts lint` | Run linting with flake8 and mypy |
-| `dev-scripts security` | Run security checks with bandit |
-| `dev-scripts clean` | Clean build artifacts |
-| `dev-scripts build` | Build the package |
-| `dev-scripts install-dev` | Install in development mode |
-| `dev-scripts profile` | Run performance profiling |
-| `dev-scripts benchmark` | Run performance benchmarks |
-| `dev-scripts docs` | Build documentation |
-| `dev-scripts all-checks` | Run all quality checks |
-
-## Flake Apps
+## Flake Runner
 
 You can also run apps directly:
 
@@ -69,7 +48,7 @@ nix run .#partial-demo
 
 ## Development Tools Included
 
-- **Python 3.11** with full development stack
+- **Python 3.13** with full development stack
 - **Testing**: pytest, pytest-cov, pytest-xdist
 - **Code Quality**: black, isort, flake8, mypy, bandit
 - **Performance**: memory-profiler, line-profiler, cProfile
@@ -116,29 +95,6 @@ The development environment sets:
 - `PYTHONPATH` - Includes current directory
 - `PYTEST_ADDOPTS="--tb=short"` - Shorter test output
 
-## Excluded from Packaging
-
-These Nix development files are automatically excluded from package distribution:
-- `flake.nix`
-- `flake.lock`
-- `shell.nix`
-- `.envrc`
-- `.direnv/`
-- Development artifacts
-
-## Performance Testing
-
-```bash
-# Run performance benchmarks
-dev-scripts benchmark
-
-# Profile a specific script
-dev-scripts profile
-
-# Memory profiling
-python -m memory_profiler examples/demo.py
-```
-
 ## Troubleshooting
 
 1. **Flakes not enabled**: Add to `/etc/nixos/configuration.nix`:
@@ -158,5 +114,3 @@ python -m memory_profiler examples/demo.py
    ```bash
    nix flake update
    ```
-
-This development environment provides everything needed for productive jsonshiatsu development on NixOS!
