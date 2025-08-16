@@ -39,9 +39,9 @@ dev = [
 ]
 
 [project.urls]
-Homepage = "https://github.com/yourusername/jsonshiatsu"
-Repository = "https://github.com/yourusername/jsonshiatsu.git"
-Issues = "https://github.com/yourusername/jsonshiatsu/issues"
+Homepage = "https://github.com/JostBrand/jsonshiatsu"
+Repository = "https://github.com/JostBrand/jsonshiatsu.git"
+Issues = "https://github.com/JostBrand/jsonshiatsu/issues"
 
 [tool.black]
 line-length = 88
