@@ -11,10 +11,7 @@
       let
         pkgs = nixpkgs.legacyPackages.${system};
         
-        # Use Python 3.13
         python = pkgs.python313;
-        
-        # Python with development packages included
         pythonWithPkgs = python.withPackages (ps: with ps; [
           pip
           setuptools
@@ -29,7 +26,6 @@
           # Add core dependencies to avoid pip externally managed errors
         ]);
         
-        # Development scripts that use Nix-provided packages
         devScripts = pkgs.writeScriptBin "dev-scripts" ''
           #!/usr/bin/env bash
           
@@ -114,29 +110,17 @@
 
       in
       {
-        # Development shell with Python 3.13 and all dependencies included
         devShells.default = pkgs.mkShell {
           buildInputs = with pkgs; [
-            # Python 3.13 with development packages
             pythonWithPkgs
             
-            # Development tools
             git
             curl
             jq
             
-            # Build tools
             gnumake
-            
-            # Text editors and development utilities
-            vim
             tree
-            htop
-            
-            # Performance monitoring
             valgrind
-            
-            # Development scripts
             devScripts
           ];
 
@@ -181,7 +165,6 @@
             fi
           '';
 
-          # Environment variables
           NIX_SHELL_PRESERVE_PROMPT = 1;
         };
 
@@ -220,16 +203,13 @@
           };
         };
 
-        # Additional development utilities
         apps = {
-          # Quick test runner
           test = flake-utils.lib.mkApp {
             drv = pkgs.writeShellScriptBin "jsonshiatsu-test" ''
               ${pythonWithPkgs}/bin/python -m pytest tests/ -v
             '';
           };
           
-          # Quick demo runner
           demo = flake-utils.lib.mkApp {
             drv = pkgs.writeShellScriptBin "jsonshiatsu-demo" ''
               export PYTHONPATH="$(pwd):$PYTHONPATH"
@@ -237,7 +217,6 @@
             '';
           };
           
-          # Partial parsing demo
           partial-demo = flake-utils.lib.mkApp {
             drv = pkgs.writeShellScriptBin "jsonshiatsu-partial-demo" ''
               export PYTHONPATH="$(pwd):$PYTHONPATH"
@@ -246,7 +225,6 @@
           };
         };
 
-        # Formatter for nix code
         formatter = pkgs.nixpkgs-fmt;
       });
 }
