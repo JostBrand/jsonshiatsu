@@ -5,16 +5,21 @@ Tests focus on error context creation, message formatting, and error reporting a
 """
 
 import unittest
-from jsonshiatsu.security.exceptions import (
-    ErrorContext, jsonshiatsuError, ParseError, SecurityError, 
-    ErrorReporter, ErrorSuggestionEngine
-)
+
 from jsonshiatsu.core.tokenizer import Position
+from jsonshiatsu.security.exceptions import (
+    ErrorContext,
+    ErrorReporter,
+    ErrorSuggestionEngine,
+    ParseError,
+    SecurityError,
+    jsonshiatsuError,
+)
 
 
 class TestErrorContext(unittest.TestCase):
     """Test ErrorContext dataclass functionality."""
-    
+
     def test_error_context_creation(self):
         """Test ErrorContext creation with all fields."""
         position = Position(line=5, column=10)
@@ -25,9 +30,9 @@ class TestErrorContext(unittest.TestCase):
             context_after=" content",
             error_char="j",
             line_text="test json content",
-            column_indicator="     ^"
+            column_indicator="     ^",
         )
-        
+
         self.assertEqual(context.text, "test json content")
         self.assertEqual(context.position, position)
         self.assertEqual(context.context_before, "test ")
@@ -46,20 +51,20 @@ class TestErrorContext(unittest.TestCase):
             context_after="",
             error_char="x",
             line_text="x",
-            column_indicator="^"
+            column_indicator="^",
         )
-        
+
         self.assertEqual(context.text, "x")
         self.assertEqual(context.error_char, "x")
 
 
 class TestjsonshiatsuError(unittest.TestCase):
     """Test base jsonshiatsuError exception class."""
-    
+
     def test_basic_error_creation(self):
         """Test basic error creation with message only."""
         error = jsonshiatsuError("Test error message")
-        
+
         self.assertEqual(error.message, "Test error message")
         self.assertIsNone(error.position)
         self.assertIsNone(error.context)
@@ -70,7 +75,7 @@ class TestjsonshiatsuError(unittest.TestCase):
         """Test error creation with position information."""
         position = Position(line=3, column=15)
         error = jsonshiatsuError("Parse error", position=position)
-        
+
         self.assertEqual(error.position, position)
         self.assertIn("at line 3, column 15", str(error))
 
@@ -78,7 +83,7 @@ class TestjsonshiatsuError(unittest.TestCase):
         """Test error creation with suggestions."""
         suggestions = ["Check for missing quotes", "Verify JSON syntax"]
         error = jsonshiatsuError("Syntax error", suggestions=suggestions)
-        
+
         self.assertEqual(error.suggestions, suggestions)
         error_str = str(error)
         self.assertIn("Check for missing quotes", error_str)
@@ -94,10 +99,10 @@ class TestjsonshiatsuError(unittest.TestCase):
             context_after="value}",
             error_char="v",
             line_text='{"key": value}',
-            column_indicator="        ^"
+            column_indicator="        ^",
         )
         error = jsonshiatsuError("Unquoted value", position=position, context=context)
-        
+
         error_str = str(error)
         self.assertIn("Unquoted value", error_str)
         self.assertIn("at line 2, column 8", error_str)
@@ -111,7 +116,7 @@ class TestjsonshiatsuError(unittest.TestCase):
         position = Position(line=1, column=1)
         error = jsonshiatsuError("Start error", position=position)
         self.assertIn("at line 1, column 1", str(error))
-        
+
         # Error with empty suggestions
         error = jsonshiatsuError("Empty suggestions", suggestions=[])
         self.assertEqual(error.suggestions, [])
@@ -119,7 +124,7 @@ class TestjsonshiatsuError(unittest.TestCase):
 
 class TestParseError(unittest.TestCase):
     """Test ParseError specific functionality."""
-    
+
     def test_parse_error_inheritance(self):
         """Test that ParseError inherits from jsonshiatsuError."""
         error = ParseError("Parse failure")
@@ -130,7 +135,7 @@ class TestParseError(unittest.TestCase):
         """Test ParseError with position information."""
         position = Position(line=4, column=20)
         error = ParseError("Expected colon", position=position)
-        
+
         self.assertEqual(error.position, position)
         self.assertIn("Expected colon", str(error))
         self.assertIn("at line 4, column 20", str(error))
@@ -138,7 +143,7 @@ class TestParseError(unittest.TestCase):
 
 class TestSecurityError(unittest.TestCase):
     """Test SecurityError specific functionality."""
-    
+
     def test_security_error_inheritance(self):
         """Test that SecurityError inherits from jsonshiatsuError."""
         error = SecurityError("Security violation")
@@ -155,7 +160,7 @@ class TestSecurityError(unittest.TestCase):
 
 class TestErrorReporter(unittest.TestCase):
     """Test ErrorReporter functionality."""
-    
+
     def setUp(self):
         """Set up test ErrorReporter."""
         self.test_text = '{"key": "value", "number": 123}'
@@ -170,9 +175,11 @@ class TestErrorReporter(unittest.TestCase):
         """Test creating ParseError through ErrorReporter."""
         position = Position(line=1, column=10)
         suggestions = ["Check syntax"]
-        
-        error = self.reporter.create_parse_error("Test parse error", position, suggestions)
-        
+
+        error = self.reporter.create_parse_error(
+            "Test parse error", position, suggestions
+        )
+
         self.assertIsInstance(error, ParseError)
         self.assertEqual(error.message, "Test parse error")
         self.assertEqual(error.position, position)
@@ -181,7 +188,7 @@ class TestErrorReporter(unittest.TestCase):
     def test_create_security_error(self):
         """Test creating SecurityError through ErrorReporter."""
         error = self.reporter.create_security_error("Security issue")
-        
+
         self.assertIsInstance(error, SecurityError)
         self.assertEqual(error.message, "Security issue")
 
@@ -189,7 +196,7 @@ class TestErrorReporter(unittest.TestCase):
         """Test error context generation."""
         position = Position(line=1, column=10)
         error = self.reporter.create_parse_error("Test error", position)
-        
+
         # Should have context information
         self.assertIsNotNone(error.context)
         self.assertEqual(error.context.text, self.test_text)
@@ -199,10 +206,10 @@ class TestErrorReporter(unittest.TestCase):
         """Test error reporting with multiline text."""
         multiline_text = '{\n  "key": "value",\n  "error": here\n}'
         reporter = ErrorReporter(multiline_text)
-        
+
         position = Position(line=3, column=12)
         error = reporter.create_parse_error("Unquoted value", position)
-        
+
         self.assertIn("Unquoted value", str(error))
         self.assertIn("at line 3, column 12", str(error))
 
@@ -211,23 +218,23 @@ class TestErrorReporter(unittest.TestCase):
         # Position at end of text
         position = Position(line=1, column=len(self.test_text))
         error = self.reporter.create_parse_error("End of input", position)
-        
+
         self.assertIsNotNone(error.context)
-        
+
         # Position beyond text (should handle gracefully)
         position = Position(line=1, column=1000)
         error = self.reporter.create_parse_error("Beyond text", position)
-        
+
         self.assertIsNotNone(error.context)
 
 
 class TestErrorSuggestionEngine(unittest.TestCase):
     """Test ErrorSuggestionEngine functionality."""
-    
+
     def test_suggest_for_unexpected_token(self):
         """Test suggestions for unexpected tokens."""
         suggestions = ErrorSuggestionEngine.suggest_for_unexpected_token('"')
-        
+
         self.assertIsInstance(suggestions, list)
         self.assertGreater(len(suggestions), 0)
         self.assertTrue(any("quote" in s.lower() for s in suggestions))
@@ -238,7 +245,7 @@ class TestErrorSuggestionEngine(unittest.TestCase):
         obj_suggestions = ErrorSuggestionEngine.suggest_for_unclosed_structure("object")
         self.assertIsInstance(obj_suggestions, list)
         self.assertTrue(any("}" in s for s in obj_suggestions))
-        
+
         # Test for array
         arr_suggestions = ErrorSuggestionEngine.suggest_for_unclosed_structure("array")
         self.assertIsInstance(arr_suggestions, list)
@@ -248,10 +255,10 @@ class TestErrorSuggestionEngine(unittest.TestCase):
         """Test suggestions for invalid values."""
         # Test with a value that should generate suggestions
         suggestions = ErrorSuggestionEngine.suggest_for_invalid_value("True")
-        
+
         self.assertIsInstance(suggestions, list)
         self.assertGreater(len(suggestions), 0)
-        
+
         # Test with a value that doesn't generate suggestions
         no_suggestions = ErrorSuggestionEngine.suggest_for_invalid_value("@")
         self.assertIsInstance(no_suggestions, list)
@@ -264,7 +271,7 @@ class TestErrorSuggestionEngine(unittest.TestCase):
             ErrorSuggestionEngine.suggest_for_unclosed_structure("object"),
             ErrorSuggestionEngine.suggest_for_invalid_value("True"),
         ]
-        
+
         for suggestions in test_cases:
             self.assertIsInstance(suggestions, list)
             self.assertGreater(len(suggestions), 0)
@@ -274,5 +281,5 @@ class TestErrorSuggestionEngine(unittest.TestCase):
                 self.assertGreater(len(suggestion.strip()), 0)
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     unittest.main()

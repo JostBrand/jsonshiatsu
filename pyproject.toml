@@ -19,7 +19,6 @@ classifiers = [
     "License :: OSI Approved :: MIT License",
     "Operating System :: OS Independent",
     "Programming Language :: Python :: 3",
-    "Programming Language :: Python :: 3.8",
     "Programming Language :: Python :: 3.9",
     "Programming Language :: Python :: 3.10",
     "Programming Language :: Python :: 3.11",
@@ -32,18 +31,27 @@ classifiers = [
 packages = [{include = "jsonshiatsu"}]
 
 [tool.poetry.dependencies]
-python = ">=3.8,<3.14"
+python = ">=3.9,<3.14"
 
 [tool.poetry.group.dev.dependencies]
 pytest = "^7.0"
 pytest-cov = "^4.0"
-black = "^22.0"
+black = "^24.3.0"
 flake8 = "^5.0"
 mypy = "^1.0"
+isort = "^6.0.1"
 
 [tool.black]
 line-length = 88
 target-version = ['py38']
+
+[tool.isort]
+profile = "black"
+line_length = 88
+
+[tool.flake8]
+max-line-length = 88
+extend-ignore = ["E203", "W503"]
 
 [tool.mypy]
 python_version = "3.8"

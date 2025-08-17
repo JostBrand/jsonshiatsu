@@ -6,6 +6,7 @@ stress testing, and real-world complex scenarios.
 """
 
 import unittest
+
 import jsonshiatsu
 from jsonshiatsu.security.exceptions import JSONDecodeError, SecurityError
 
@@ -13,7 +14,7 @@ from jsonshiatsu.security.exceptions import JSONDecodeError, SecurityError
 class TestSparseArraysComprehensive(unittest.TestCase):
     """Comprehensive tests for sparse array handling."""
 
-    def test_basic_sparse_patterns(self):
+    def test_basic_sparse_patterns(self) -> None:
         """Test basic sparse array patterns."""
         test_cases = [
             ("[1,, 3]", [1, None, 3]),
@@ -29,7 +30,7 @@ class TestSparseArraysComprehensive(unittest.TestCase):
                 result = jsonshiatsu.loads(json_str)
                 self.assertEqual(result, expected)
 
-    def test_nested_sparse_arrays(self):
+    def test_nested_sparse_arrays(self) -> None:
         """Test nested sparse arrays."""
         nested_sparse = "[1, [,, 3], [4,, 6]]"
         result = jsonshiatsu.loads(nested_sparse)
@@ -42,7 +43,7 @@ class TestSparseArraysComprehensive(unittest.TestCase):
         expected = [[[1, None], None, [None, 3]]]
         self.assertEqual(result, expected)
 
-    def test_sparse_arrays_in_objects(self):
+    def test_sparse_arrays_in_objects(self) -> None:
         """Test sparse arrays inside objects."""
         obj_with_sparse = """{
             "data": [1,, 3],
@@ -58,7 +59,7 @@ class TestSparseArraysComprehensive(unittest.TestCase):
         }
         self.assertEqual(result, expected)
 
-    def test_sparse_arrays_with_other_malformed_patterns(self):
+    def test_sparse_arrays_with_other_malformed_patterns(self) -> None:
         """Test sparse arrays combined with other malformed JSON."""
         complex_sparse = """{
             // Array with sparse elements
@@ -88,7 +89,7 @@ class TestSparseArraysComprehensive(unittest.TestCase):
 class TestEscapeSequenceComprehensive(unittest.TestCase):
     """Comprehensive tests for escape sequence handling."""
 
-    def test_standard_json_escapes(self):
+    def test_standard_json_escapes(self) -> None:
         """Test all standard JSON escape sequences."""
         escapes_json = """{
             "newline": "line1\\nline2",
@@ -112,7 +113,7 @@ class TestEscapeSequenceComprehensive(unittest.TestCase):
         self.assertEqual(result["quote"], 'He said "hello"')
         self.assertEqual(result["slash"], "http://example.com")
 
-    def test_unicode_escapes_comprehensive(self):
+    def test_unicode_escapes_comprehensive(self) -> None:
         """Test comprehensive Unicode escape handling."""
         unicode_json = """{
             "ascii": "\\u0041\\u0042\\u0043",
@@ -149,7 +150,7 @@ class TestEscapeSequenceComprehensive(unittest.TestCase):
                     # Acceptable to fail, but shouldn't crash
                     pass
 
-    def test_escape_sequences_in_keys(self):
+    def test_escape_sequences_in_keys(self) -> None:
         """Test escape sequences in object keys."""
         key_escapes = """{
             "\\u0041": "Unicode A as key",
@@ -185,7 +186,7 @@ class TestEscapeSequenceComprehensive(unittest.TestCase):
 class TestComplexRealWorldScenarios(unittest.TestCase):
     """Test complex real-world malformed JSON scenarios."""
 
-    def test_llm_api_response_simulation(self):
+    def test_llm_api_response_simulation(self) -> None:
         """Test simulated LLM API response with multiple issues."""
         llm_response = """```json
         {
@@ -212,7 +213,7 @@ class TestComplexRealWorldScenarios(unittest.TestCase):
             }
         }
         ```
-        
+
         This response contains multiple formatting issues but should be parseable."""
 
         result = jsonshiatsu.loads(llm_response)
@@ -227,7 +228,7 @@ class TestComplexRealWorldScenarios(unittest.TestCase):
         self.assertEqual(result["response"]["timestamp"], "2025-08-16T10:30:00Z")
         self.assertEqual(result["response"]["metadata"]["model"], "gpt-4")
 
-    def test_legacy_config_file(self):
+    def test_legacy_config_file(self) -> None:
         """Test legacy configuration file with mixed formats."""
         legacy_config = """{
             // Legacy application config
@@ -248,7 +249,7 @@ class TestComplexRealWorldScenarios(unittest.TestCase):
                 version: "v2",
                 'endpoints': [
                     "/users",
-                    "/posts", 
+                    "/posts",
                     "/comments"
                 ],
                 rate_limit: {
@@ -277,7 +278,7 @@ class TestComplexRealWorldScenarios(unittest.TestCase):
         self.assertEqual(result["api"]["version"], "v2")
         self.assertEqual(len(result["features"]), 4)
 
-    def test_mongodb_export_style(self):
+    def test_mongodb_export_style(self) -> None:
         """Test MongoDB export style JSON with ObjectIds and ISODates."""
         mongodb_json = """{
             "_id": ObjectId("507f1f77bcf86cd799439011"),
@@ -321,7 +322,7 @@ class TestComplexRealWorldScenarios(unittest.TestCase):
         self.assertEqual(result["name"], "John Doe")
         self.assertEqual(len(result["profile"]["skills"]), 3)
 
-    def test_javascript_object_literal(self):
+    def test_javascript_object_literal(self) -> None:
         """Test JavaScript object literal style."""
         js_object = """{
             // JavaScript object
@@ -487,7 +488,7 @@ class TestPerformanceEdgeCases(unittest.TestCase):
             # Expected if size limit is exceeded
             pass
 
-    def test_large_objects_within_limits(self):
+    def test_large_objects_within_limits(self) -> None:
         """Test large objects within security limits."""
         # Create moderately large object
         size = 100
@@ -498,7 +499,7 @@ class TestPerformanceEdgeCases(unittest.TestCase):
             result = jsonshiatsu.loads(large_object)
             self.assertEqual(len(result), size)
             self.assertEqual(result["key0"], "value0")
-            self.assertEqual(result[f"key{size-1}"], f"value{size-1}")
+            self.assertEqual(result[f"key{size - 1}"], f"value{size - 1}")
 
         except SecurityError:
             # Expected if key count limit is exceeded

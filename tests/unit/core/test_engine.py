@@ -5,10 +5,11 @@ Tests focus on parsing logic, not preprocessing (which is covered in transformer
 """
 
 import unittest
+
 import jsonshiatsu
-from jsonshiatsu.core.engine import Parser, Lexer
+from jsonshiatsu.core.engine import Lexer, Parser
+from jsonshiatsu.security.exceptions import ErrorReporter, ParseError
 from jsonshiatsu.utils.config import ParseConfig
-from jsonshiatsu.security.exceptions import ParseError, ErrorReporter
 
 
 class TestParserCore(unittest.TestCase):
@@ -37,7 +38,7 @@ class TestParserCore(unittest.TestCase):
 
     def test_basic_array_parsing(self):
         """Test parsing of basic arrays."""
-        result = self._parse_tokens('[1, 2, 3]')
+        result = self._parse_tokens("[1, 2, 3]")
         self.assertEqual(result, [1, 2, 3])
 
         result = self._parse_tokens('["a", "b", "c"]')
@@ -71,10 +72,10 @@ class TestParserCore(unittest.TestCase):
         """Test that parser provides useful error messages."""
         with self.assertRaises(ParseError) as cm:
             self._parse_tokens('{"key" "value"}')  # Missing colon
-        
+
         error = cm.exception
         self.assertIn("Expected ':'", str(error))
-        self.assertTrue(hasattr(error, 'position'))
+        self.assertTrue(hasattr(error, "position"))
 
 
 class TestEngineIntegration(unittest.TestCase):
@@ -113,7 +114,9 @@ class TestEngineIntegration(unittest.TestCase):
 
     def test_compatibility_with_standard_json(self):
         """Test that valid JSON still works perfectly."""
-        valid_json = '{"standard": "json", "array": [1, 2, 3], "nested": {"works": true}}'
+        valid_json = (
+            '{"standard": "json", "array": [1, 2, 3], "nested": {"works": true}}'
+        )
         result = jsonshiatsu.loads(valid_json)
         expected = {"standard": "json", "array": [1, 2, 3], "nested": {"works": True}}
         self.assertEqual(result, expected)
