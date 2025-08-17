@@ -421,13 +421,35 @@ def _parse_internal(text: Union[str, TextIO], config: ParseConfig) -> Any:
             
         except (ParseError, SecurityError) as e:
             if config.fallback and not isinstance(e, SecurityError):
+                # Try additional preprocessing on failure
                 try:
-                    return json.loads(preprocessed_text)
-                except json.JSONDecodeError:
+                    # Apply more aggressive preprocessing
+                    from ..utils.config import PreprocessingConfig
+                    
+                    # Use more aggressive config for fallback
+                    fallback_config = PreprocessingConfig.aggressive()
+                    fallback_text = JSONPreprocessor.preprocess(text, fallback_config)
+                    
+                    # Try parsing the fallback text
+                    lexer = Lexer(fallback_text)
+                    tokens = lexer.get_all_tokens()
+                    parser = Parser(tokens, config, error_reporter)
+                    return parser.parse()
+                    
+                except Exception:
+                    # If that fails, try standard json.loads on various versions
                     try:
-                        return json.loads(text)
+                        return json.loads(preprocessed_text)
                     except json.JSONDecodeError:
-                        raise e
+                        try:
+                            return json.loads(text)
+                        except json.JSONDecodeError:
+                            # Final attempt - try to extract just the JSON part more aggressively
+                            try:
+                                cleaned = JSONPreprocessor.extract_first_json(preprocessed_text)
+                                return json.loads(cleaned)
+                            except json.JSONDecodeError:
+                                raise e
             else:
                 raise e
     

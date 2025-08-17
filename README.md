@@ -2,7 +2,7 @@
 
 A *therapeutic* JSON parser for Python that gently massages malformed JSON back into shape. Like the Japanese healing art of shiatsu, this library applies just the right pressure points to transform broken JSON into something beautiful and usable.
 
-Perfect for real-world scenarios where JSON may be improperly formatted, including LLM APIs, legacy systems, and user-generated content that can't be controlled.
+Perfect for real-world scenarios where JSON may be improperly formatted, including LLM APIs, legacy systems, and user-generated content that can't be controlled. If you can control the model better use jsonformer. Regex is always an attack surface, be cautious when using this library.
 
 ## Features
 

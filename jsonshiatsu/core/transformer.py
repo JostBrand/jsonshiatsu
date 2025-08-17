@@ -324,6 +324,77 @@ class JSONPreprocessor:
         return text
     
     @staticmethod
+    def fix_unescaped_quotes_in_strings(text: str) -> str:
+        """
+        Fix unescaped double quotes within string values.
+        
+        Handles cases like: "Hello "world"" -> "Hello \"world\""
+        """
+        def fix_quotes(match):
+            content = match.group(1)
+            
+            # If no internal quotes, return as-is
+            if '"' not in content:
+                return match.group(0)
+            
+            # Simple heuristic: if we have unescaped quotes in the middle,
+            # escape them. We'll be conservative and only fix obvious cases.
+            # Pattern: text"word"text -> text\"word\"text
+            
+            # Find unescaped quotes (not preceded by \)
+            result = []
+            i = 0
+            while i < len(content):
+                if content[i] == '"':
+                    # Check if this quote is already escaped
+                    escaped = False
+                    backslash_count = 0
+                    j = i - 1
+                    while j >= 0 and content[j] == '\\':
+                        backslash_count += 1
+                        j -= 1
+                    
+                    # Even number of backslashes means the quote is not escaped
+                    escaped = (backslash_count % 2 == 1)
+                    
+                    if not escaped:
+                        result.append('\\"')
+                    else:
+                        result.append('"')
+                else:
+                    result.append(content[i])
+                i += 1
+            
+            return f'"{"".join(result)}"'
+        
+        # Apply to double-quoted strings only (be conservative)
+        # Use a pattern that matches the outermost quotes
+        # This is tricky - we need to handle nested quotes properly
+        
+        # Simple approach: find strings that contain unescaped internal quotes
+        # Pattern: "text"word"text" where the middle quotes aren't escaped
+        pattern = r'"([^"\\]*(?:\\.[^"\\]*)*)"'
+        
+        # We need a more sophisticated approach for strings with unescaped quotes
+        # Let's use a different strategy - find problem patterns specifically
+        
+        # Look for the specific pattern: "text "word" text"
+        # This matches strings that start and end with quotes but have unescaped quotes inside
+        problem_pattern = r'"([^"]*"[^"]*)"(?=\s*[,}}\]\n])'
+        
+        def fix_problem_quotes(match):
+            full_content = match.group(1)
+            # Only fix if this looks like the problematic pattern
+            if '"' in full_content and not full_content.startswith('\\"'):
+                # Simple fix: escape all internal quotes
+                fixed = full_content.replace('"', '\\"')
+                return f'"{fixed}"'
+            return match.group(0)
+        
+        text = re.sub(problem_pattern, fix_problem_quotes, text)
+        return text
+    
+    @staticmethod
     def handle_incomplete_json(text: str) -> str:
         """
         Attempt to complete incomplete JSON structures by adding missing closing braces/brackets.

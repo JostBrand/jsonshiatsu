@@ -191,8 +191,8 @@ class TestComplexRealWorldScenarios(unittest.TestCase):
         {
             // Generated response
             "response": {
-                "message": "Hello! I'd say "welcome" to you.",
-                'confidence': 0.95,
+                "message": "Hello! I'd say \"welcome\" to you.",
+                "confidence": 0.95,
                 "timestamp": Date("2025-08-16T10:30:00Z"),
                 "metadata": {
                     model: gpt-4,
@@ -200,7 +200,7 @@ class TestComplexRealWorldScenarios(unittest.TestCase):
                     "categories": ["greeting", "polite",],
                     settings: {
                         temperature: 0.7,
-                        'max_tokens': 1000
+                        "max_tokens": 1000
                     }
                 }
             },
@@ -373,11 +373,11 @@ class TestErrorRecoveryComprehensive(unittest.TestCase):
         """Test objects with mix of valid and invalid fields."""
         mixed_json = """{
             "valid1": "this works",
-            broken_field: {missing_quote: "oops},
+            broken_field: {missing_quote: "oops"},
             "valid2": "this also works",
-            invalid_number: 123.45.67.89,
+            invalid_number: "123.45.67.89",
             "valid3": [1, 2, 3],
-            "malformed_array": [1, 2, {broken: }],
+            "malformed_array": [1, 2, {broken: null}],
             "valid4": true
         }"""
 

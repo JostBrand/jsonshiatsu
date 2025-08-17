@@ -1,1 +1,1 @@
-"""Error recovery and partial parsing tests."""
+"""Error recovery and partial parsing unit tests."""

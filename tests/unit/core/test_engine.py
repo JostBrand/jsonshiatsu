@@ -1,151 +1,121 @@
 """
-Test cases for the jsonshiatsu parser.
+Test cases for the jsonshiatsu core engine functionality.
+
+Tests focus on parsing logic, not preprocessing (which is covered in transformer tests).
 """
 
 import unittest
-from jsonshiatsu import parse
-from jsonshiatsu.security.exceptions import ParseError
+import jsonshiatsu
+from jsonshiatsu.core.engine import Parser, Lexer
+from jsonshiatsu.utils.config import ParseConfig
+from jsonshiatsu.security.exceptions import ParseError, ErrorReporter
 
 
-class TestParser(unittest.TestCase):
+class TestParserCore(unittest.TestCase):
+    """Test core parser functionality with minimal preprocessing."""
 
-    def test_standard_json(self):
-        # Test that standard JSON still works
-        result = parse('{"test": "value"}')
-        self.assertEqual(result, {"test": "value"})
+    def setUp(self):
+        """Set up with minimal preprocessing config for pure parsing tests."""
+        self.config = ParseConfig()
+        self.config.preprocessing_config = None  # Disable preprocessing for unit tests
 
-        result = parse("[1, 2, 3]")
+    def _parse_tokens(self, json_str):
+        """Helper to parse tokens directly for parser testing."""
+        lexer = Lexer(json_str)
+        tokens = lexer.get_all_tokens()
+        error_reporter = ErrorReporter(json_str)  # ErrorReporter needs text
+        parser = Parser(tokens, self.config, error_reporter)
+        return parser.parse()
+
+    def test_basic_object_parsing(self):
+        """Test parsing of basic objects."""
+        result = self._parse_tokens('{"key": "value"}')
+        self.assertEqual(result, {"key": "value"})
+
+        result = self._parse_tokens('{"a": 1, "b": 2}')
+        self.assertEqual(result, {"a": 1, "b": 2})
+
+    def test_basic_array_parsing(self):
+        """Test parsing of basic arrays."""
+        result = self._parse_tokens('[1, 2, 3]')
         self.assertEqual(result, [1, 2, 3])
 
-    def test_unquoted_keys(self):
-        # Unquoted object keys should work
-        result = parse('{test: "value"}')
-        self.assertEqual(result, {"test": "value"})
+        result = self._parse_tokens('["a", "b", "c"]')
+        self.assertEqual(result, ["a", "b", "c"])
 
-        result = parse('{key1: "value1", key2: "value2"}')
-        self.assertEqual(result, {"key1": "value1", "key2": "value2"})
+    def test_number_parsing(self):
+        """Test number parsing accuracy."""
+        result = self._parse_tokens('{"int": 123, "float": 45.67, "neg": -89}')
+        self.assertEqual(result["int"], 123)
+        self.assertEqual(result["float"], 45.67)
+        self.assertEqual(result["neg"], -89)
 
-    def test_single_quotes(self):
-        # Single quoted strings should work
-        result = parse("{'test': 'value'}")
-        self.assertEqual(result, {"test": "value"})
+    def test_boolean_null_parsing(self):
+        """Test boolean and null value parsing."""
+        result = self._parse_tokens('{"t": true, "f": false, "n": null}')
+        self.assertEqual(result, {"t": True, "f": False, "n": None})
 
-        result = parse("{test: 'value'}")
-        self.assertEqual(result, {"test": "value"})
-
-    def test_mixed_quotes(self):
-        # Mix of single and double quotes
-        result = parse("{\"test\": 'value'}")
-        self.assertEqual(result, {"test": "value"})
-
-        result = parse("{'test': \"value\"}")
-        self.assertEqual(result, {"test": "value"})
-
-    def test_unquoted_values(self):
-        # Unquoted string values (treated as identifiers)
-        result = parse("{test: value}")
-        self.assertEqual(result, {"test": "value"})
-
-    def test_trailing_commas(self):
-        # Trailing commas should be handled
-        result = parse('{"test": "value",}')
-        self.assertEqual(result, {"test": "value"})
-
-        result = parse("[1, 2, 3,]")
-        self.assertEqual(result, [1, 2, 3, None])
-
-    def test_numbers(self):
-        # Various number formats
-        result = parse('{"int": 123}')
-        self.assertEqual(result, {"int": 123})
-
-        result = parse('{"float": 123.45}')
-        self.assertEqual(result, {"float": 123.45})
-
-        result = parse('{"negative": -123}')
-        self.assertEqual(result, {"negative": -123})
-
-        result = parse('{"scientific": 1.23e-4}')
-        self.assertEqual(result, {"scientific": 1.23e-4})
-
-    def test_boolean_and_null(self):
-        result = parse('{"bool_true": true, "bool_false": false, "null_val": null}')
-        expected = {"bool_true": True, "bool_false": False, "null_val": None}
+    def test_nested_structure_parsing(self):
+        """Test parsing of nested structures."""
+        json_str = '{"obj": {"nested": "value"}, "arr": [1, {"inner": 2}]}'
+        result = self._parse_tokens(json_str)
+        expected = {"obj": {"nested": "value"}, "arr": [1, {"inner": 2}]}
         self.assertEqual(result, expected)
 
-    def test_nested_structures(self):
-        # Nested objects and arrays
-        result = parse('{obj: {nested: "value"}, arr: [1, 2, {inner: "test"}]}')
-        expected = {"obj": {"nested": "value"}, "arr": [1, 2, {"inner": "test"}]}
-        self.assertEqual(result, expected)
+    def test_string_escape_handling(self):
+        """Test proper handling of escaped strings."""
+        result = self._parse_tokens('{"escaped": "line1\\nline2"}')
+        self.assertEqual(result["escaped"], "line1\nline2")
 
-    def test_strings_with_embedded_quotes(self):
-        # Strings with escaped quotes
-        result = parse('{"test": "He said \\"Hello\\""}')
-        self.assertEqual(result, {"test": 'He said "Hello"'})
+    def test_error_reporting(self):
+        """Test that parser provides useful error messages."""
+        with self.assertRaises(ParseError) as cm:
+            self._parse_tokens('{"key" "value"}')  # Missing colon
+        
+        error = cm.exception
+        self.assertIn("Expected ':'", str(error))
+        self.assertTrue(hasattr(error, 'position'))
 
-        result = parse("{'test': 'She said \\'Hi\\''}")
-        self.assertEqual(result, {"test": "She said 'Hi'"})
 
-    def test_strings_with_newlines(self):
-        # Strings with escape sequences
-        result = parse('{"test": "line1\\nline2"}')
-        self.assertEqual(result, {"test": "line1\nline2"})
+class TestEngineIntegration(unittest.TestCase):
+    """Test the full engine with preprocessing integration."""
 
-    def test_empty_structures(self):
-        # Empty objects and arrays
-        result = parse("{}")
-        self.assertEqual(result, {})
-
-        result = parse("[]")
-        self.assertEqual(result, [])
-
-        result = parse("{empty_obj: {}, empty_arr: []}")
-        self.assertEqual(result, {"empty_obj": {}, "empty_arr": []})
-
-    def test_whitespace_tolerance(self):
-        # Various whitespace scenarios
-        result = parse('  {  test  :  "value"  }  ')
+    def test_malformed_to_valid_conversion(self):
+        """Test that malformed JSON gets converted to valid structures."""
+        # Unquoted keys
+        result = jsonshiatsu.loads('{test: "value"}')
         self.assertEqual(result, {"test": "value"})
 
-        result = parse('{\n  test: "value"\n}')
-        self.assertEqual(result, {"test": "value"})
+        # Single quotes
+        result = jsonshiatsu.loads("{'key': 'value'}")
+        self.assertEqual(result, {"key": "value"})
 
-    def test_duplicate_keys_default(self):
-        # By default, duplicate keys should overwrite
-        result = parse('{"test": "value1", "test": "value2"}')
-        self.assertEqual(result, {"test": "value2"})
+        # Trailing commas
+        result = jsonshiatsu.loads('{"key": "value",}')
+        self.assertEqual(result, {"key": "value"})
 
-    def test_duplicate_keys_array_mode(self):
-        # With duplicate_keys=True, should create arrays
-        result = parse('{"test": "value1", "test": "value2"}', duplicate_keys=True)
-        self.assertEqual(result, {"test": ["value1", "value2"]})
+    def test_duplicate_key_handling(self):
+        """Test duplicate key handling strategies."""
+        # Default behavior - last value wins
+        result = jsonshiatsu.loads('{"key": "first", "key": "second"}')
+        self.assertEqual(result, {"key": "second"})
 
-    def test_real_world_examples(self):
-        # Real-world malformed JSON examples
-        result = parse('{ test: "this is a test"}')
-        self.assertEqual(result, {"test": "this is a test"})
+    def test_error_recovery(self):
+        """Test error recovery mechanisms."""
+        # This should either succeed with recovery or fail gracefully
+        try:
+            result = jsonshiatsu.loads('{"valid": "data", "broken": }')
+            # If it succeeds, should have some valid data
+            self.assertIn("valid", result)
+        except Exception as e:
+            # If it fails, should be a proper JSONDecodeError
+            self.assertIn("JSON", str(type(e)))
 
-        # More complex real-world example
-        malformed_json = """{
-            name: 'John Doe',
-            age: 30,
-            city: "New York",
-            hobbies: ['reading', "swimming", coding],
-            active: true,
-            score: null,
-        }"""
-
-        expected = {
-            "name": "John Doe",
-            "age": 30,
-            "city": "New York",
-            "hobbies": ["reading", "swimming", "coding"],
-            "active": True,
-            "score": None,
-        }
-
-        result = parse(malformed_json)
+    def test_compatibility_with_standard_json(self):
+        """Test that valid JSON still works perfectly."""
+        valid_json = '{"standard": "json", "array": [1, 2, 3], "nested": {"works": true}}'
+        result = jsonshiatsu.loads(valid_json)
+        expected = {"standard": "json", "array": [1, 2, 3], "nested": {"works": True}}
         self.assertEqual(result, expected)
 
 

@@ -1,8 +1,7 @@
 """
-Test cases for the JSONPreprocessor and transformation functions.
+Test cases for the JSONPreprocessor transformation functions.
 
-These tests cover the preprocessing pipeline that handles malformed JSON
-patterns before tokenization and parsing.
+Tests focus on key preprocessing functionality that enables malformed JSON parsing.
 """
 
 import unittest
@@ -10,72 +9,148 @@ from jsonshiatsu.core.transformer import JSONPreprocessor
 from jsonshiatsu.utils.config import PreprocessingConfig
 
 
-class TestJSONPreprocessorIndividual(unittest.TestCase):
-    """Test individual JSONPreprocessor methods."""
+class TestCriticalPreprocessing(unittest.TestCase):
+    """Test critical preprocessing functions that enable malformed JSON parsing."""
     
-    def test_extract_from_markdown(self):
-        """Test markdown extraction method."""
-        # JSON code block with language
-        markdown = '```json\n{"test": "value"}\n```'
-        result = JSONPreprocessor.extract_from_markdown(markdown)
-        self.assertEqual(result.strip(), '{"test": "value"}')
-        
-        # JSON code block without language
-        plain = '```\n{"test": "value"}\n```'
-        result = JSONPreprocessor.extract_from_markdown(plain)
-        self.assertEqual(result.strip(), '{"test": "value"}')
-        
-        # Inline code
-        inline = 'Text `{"test": "value"}` more text'
-        result = JSONPreprocessor.extract_from_markdown(inline)
-        self.assertEqual(result.strip(), '{"test": "value"}')
-        
-        # No markdown
-        no_markdown = '{"test": "value"}'
-        result = JSONPreprocessor.extract_from_markdown(no_markdown)
-        self.assertEqual(result, '{"test": "value"}')
-        
-        # Complex markdown with explanation
-        complex = '''Here's the response:
-        ```json
-        {"status": "success", "data": [1, 2, 3]}
-        ```
-        This shows the result.'''
-        result = JSONPreprocessor.extract_from_markdown(complex)
-        self.assertEqual(result.strip(), '{"status": "success", "data": [1, 2, 3]}')
-    
-    def test_remove_comments(self):
-        """Test comment removal method."""
-        # Line comments
-        with_line = '{"key": "value"} // this is a comment'
-        result = JSONPreprocessor.remove_comments(with_line)
+    def test_markdown_extraction(self):
+        """Test extraction of JSON from markdown code blocks."""
+        # Basic markdown extraction
+        markdown_input = '```json\n{"key": "value"}\n```'
+        result = JSONPreprocessor.extract_from_markdown(markdown_input)
         self.assertEqual(result.strip(), '{"key": "value"}')
         
+        # Extraction with trailing text (common in LLM responses)
+        llm_style = '''```json
+        {"response": "success"}
+        ```
+        This is the result.'''
+        result = JSONPreprocessor.extract_from_markdown(llm_style)
+        self.assertIn('"response"', result)
+        self.assertNotIn('This is the result', result)
+    
+    def test_comment_removal(self):
+        """Test JavaScript-style comment removal."""
+        # Line comments
+        with_comments = '{"key": "value"} // comment'
+        result = JSONPreprocessor.remove_comments(with_comments)
+        self.assertNotIn('//', result)
+        self.assertIn('"key"', result)
+        
         # Block comments
-        with_block = '{"key": /* comment */ "value"}'
-        result = JSONPreprocessor.remove_comments(with_block)
+        block_comments = '{"key": /* comment */ "value"}'
+        result = JSONPreprocessor.remove_comments(block_comments)
+        self.assertNotIn('comment', result)
         self.assertIn('"key"', result)
         self.assertIn('"value"', result)
-        self.assertNotIn('comment', result)
+    
+    def test_quote_normalization(self):
+        """Test normalization of various quote styles."""
+        # Smart quotes to standard quotes
+        smart_quotes = '{"key": "value"}'  # Using smart quotes
+        result = JSONPreprocessor.normalize_quotes(smart_quotes)
+        # Should convert to standard ASCII quotes
+        self.assertIn('"key"', result)
         
-        # Mixed comments
-        mixed = '''{"user": {
-            "name": "Alice", /* first name */
-            "age": 30 // years old
-        }}'''
-        result = JSONPreprocessor.remove_comments(mixed)
-        self.assertNotIn('/*', result)
-        self.assertNotIn('*/', result)
+        # Mixed quote styles should be handled consistently
+        mixed = """{'single': "double", "mixed": 'content'}"""
+        result = JSONPreprocessor.normalize_quotes(mixed)
+        # Should normalize quote characters appropriately
+        self.assertTrue('"' in result or "'" in result)
+    
+    def test_boolean_null_normalization(self):
+        """Test normalization of boolean and null values."""
+        # Python-style to JSON-style
+        python_style = '{"flag": True, "empty": None, "disabled": False}'
+        result = JSONPreprocessor.normalize_boolean_null(python_style)
+        self.assertIn('true', result)
+        self.assertIn('false', result)
+        self.assertIn('null', result)
+        
+        # Alternative boolean representations
+        alternative = '{"yes": yes, "no": no, "undefined": undefined}'
+        result = JSONPreprocessor.normalize_boolean_null(alternative)
+        # Should convert to standard JSON values
+        self.assertIn('true', result.lower())
+        self.assertIn('false', result.lower())
+        self.assertIn('null', result.lower())
+    
+    def test_incomplete_json_completion(self):
+        """Test completion of incomplete JSON structures."""
+        # Missing closing brace
+        incomplete = '{"key": "value"'
+        result = JSONPreprocessor.handle_incomplete_json(incomplete)
+        self.assertEqual(result, '{"key": "value"}')
+        
+        # Missing closing bracket
+        incomplete_array = '["a", "b"'
+        result = JSONPreprocessor.handle_incomplete_json(incomplete_array)
+        self.assertEqual(result, '["a", "b"]')
+        
+        # Nested incomplete structures
+        nested_incomplete = '{"outer": {"inner": "value"'
+        result = JSONPreprocessor.handle_incomplete_json(nested_incomplete)
+        self.assertEqual(result, '{"outer": {"inner": "value"}}')
+
+
+class TestPreprocessingPipeline(unittest.TestCase):
+    """Test the full preprocessing pipeline with different configurations."""
+    
+    def test_aggressive_preprocessing(self):
+        """Test aggressive preprocessing configuration."""
+        # Complex malformed input
+        malformed_input = '''
+        ```json
+        {
+            // User data
+            name: 'John Doe',
+            "age": 30,
+            active: True,  // Python boolean
+            metadata: undefined
+        }
+        ```
+        Processing complete.
+        '''
+        
+        config = PreprocessingConfig.aggressive()
+        result = JSONPreprocessor.preprocess(malformed_input, config)
+        
+        # Should extract from markdown
+        self.assertNotIn('```', result)
+        self.assertNotIn('Processing complete', result)
+        
+        # Should remove comments
         self.assertNotIn('//', result)
         
-        # Comments at start of lines
-        line_start = '''{
-            // This is a comment
-            "key": "value"
-        }'''
-        result = JSONPreprocessor.remove_comments(line_start)
+        # Should have valid JSON structure
+        self.assertIn('"name"', result)
+        self.assertIn('"age"', result)
+    
+    def test_conservative_preprocessing(self):
+        """Test conservative preprocessing configuration."""
+        # Same input but with conservative settings
+        input_json = '{"key": "value"} // comment'
+        
+        config = PreprocessingConfig.conservative()
+        result = JSONPreprocessor.preprocess(input_json, config)
+        
+        # Should still remove comments (safe operation)
         self.assertNotIn('//', result)
         self.assertIn('"key"', result)
+    
+    def test_preprocessing_idempotency(self):
+        """Test that preprocessing is idempotent for valid JSON."""
+        valid_json = '{"key": "value", "number": 123, "bool": true}'
+        
+        config = PreprocessingConfig.aggressive()
+        
+        # First pass
+        result1 = JSONPreprocessor.preprocess(valid_json, config)
+        
+        # Second pass
+        result2 = JSONPreprocessor.preprocess(result1, config)
+        
+        # Should be stable (idempotent)
+        self.assertEqual(result1.strip(), result2.strip())
     
     def test_unwrap_function_calls(self):
         """Test function call unwrapping method."""
