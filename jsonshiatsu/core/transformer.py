@@ -185,6 +185,126 @@ class JSONPreprocessor:
         return text
     
     @staticmethod
+    def unwrap_inline_function_calls(text: str) -> str:
+        """
+        Unwrap function calls within JSON values.
+        
+        Handles common patterns found in LLM responses and MongoDB exports:
+        - Date("2025-08-16T10:30:00Z") → "2025-08-16T10:30:00Z"
+        - ObjectId("507f1f77bcf86cd799439011") → "507f1f77bcf86cd799439011"
+        - ISODate("2023-01-01T00:00:00Z") → "2023-01-01T00:00:00Z"
+        - RegExp("pattern", "flags") → "/pattern/flags"
+        - UUID("123e4567-e89b-12d3-a456-426614174000") → "123e4567-e89b-12d3-a456-426614174000"
+        """
+        # Common MongoDB/JavaScript function patterns
+        patterns = [
+            # Date functions with quoted strings - more precise patterns
+            (r'\bDate\s*\(\s*"([^"]+)"\s*\)', r'"\1"'),
+            (r'\bISODate\s*\(\s*"([^"]+)"\s*\)', r'"\1"'),
+            (r'\bnew\s+Date\s*\(\s*"([^"]+)"\s*\)', r'"\1"'),
+            
+            # ObjectId and UUID functions
+            (r'\bObjectId\s*\(\s*"([^"]+)"\s*\)', r'"\1"'),
+            (r'\bUUID\s*\(\s*"([^"]+)"\s*\)', r'"\1"'),
+            (r'\bBinData\s*\(\s*\d+\s*,\s*"([^"]+)"\s*\)', r'"\1"'),
+            
+            # RegExp functions - handle both forms
+            (r'\bRegExp\s*\(\s*"([^"]+)"\s*,\s*"([^"]*)"\s*\)', r'"/\1/\2"'),
+            (r'\bRegExp\s*\(\s*"([^"]+)"\s*\)', r'"/\1/"'),
+            
+            # MongoDB specific functions
+            (r'\bNumberLong\s*\(\s*"?([^)"]+)"?\s*\)', r'\1'),
+            (r'\bNumberInt\s*\(\s*"?([^)"]+)"?\s*\)', r'\1'),
+            (r'\bNumberDecimal\s*\(\s*"([^"]+)"\s*\)', r'"\1"'),
+            
+            # Handle function calls without quotes (common in LLM output) - more restrictive
+            (r'\bDate\s*\(\s*([^)"\s,][^),]*)\s*\)', r'"\1"'),
+            (r'\bObjectId\s*\(\s*([^)"\s,][^),]*)\s*\)', r'"\1"'),
+            (r'\bUUID\s*\(\s*([^)"\s,][^),]*)\s*\)', r'"\1"'),
+        ]
+        
+        for pattern, replacement in patterns:
+            text = re.sub(pattern, replacement, text, flags=re.IGNORECASE)
+        
+        return text
+    
+    @staticmethod
+    def quote_unquoted_values(text: str) -> str:
+        """
+        Add quotes around unquoted values that contain special characters.
+        
+        Handles common patterns in LLM responses and JavaScript object literals:
+        - model: gpt-4 → model: "gpt-4"
+        - version: v2.1 → version: "v2.1" 
+        - type: text/plain → type: "text/plain"
+        - url: https://example.com → url: "https://example.com"
+        - status: success → status: "success"
+        
+        Only quotes values that would be invalid as JSON identifiers.
+        """
+        def quote_value(match):
+            colon_space = match.group(1)
+            value = match.group(2)
+            after = match.group(3) if len(match.groups()) >= 3 else ""
+            
+            # Check if value needs quoting
+            # Quote if it contains special characters that make it invalid as an identifier
+            needs_quoting = bool(re.search(r'[-./:#@?&=+%]', value))
+            
+            # Also quote if it looks like a URL, version number, or complex identifier
+            if any(pattern in value.lower() for pattern in ['http', 'www.', 'v1.', 'v2.', 'gpt-', 'claude-']):
+                needs_quoting = True
+            
+            # Quote any string value that's not a valid JSON literal
+            # Don't quote simple boolean/null values or numbers
+            if value.lower() in ['true', 'false', 'null']:
+                needs_quoting = False
+            elif value.replace('.', '').replace('-', '').replace('+', '').replace('e', '').replace('E', '').isdigit():
+                needs_quoting = False
+            else:
+                # Quote any other string value (like 'success', 'error', etc.)
+                needs_quoting = True
+            
+            if needs_quoting:
+                return f'{colon_space}"{value}"{after}'
+            else:
+                return match.group(0)
+        
+        # Pattern to match unquoted values after colon
+        # Look for: colon whitespace identifier
+        pattern = r'(:\s*)([a-zA-Z_][a-zA-Z0-9_.-]*)\s*(?=[,\]}]|$)'
+        
+        return re.sub(pattern, quote_value, text, flags=re.MULTILINE)
+    
+    @staticmethod
+    def quote_unquoted_keys(text: str) -> str:
+        """
+        Add quotes around unquoted object keys.
+        
+        Handles:
+        - model: value → "model": value
+        - debug_info: {...} → "debug_info": {...}
+        
+        Only quotes keys that are valid identifiers but not already quoted.
+        """
+        def quote_key(match):
+            before_context = match.group(1)
+            key = match.group(2)
+            colon_space = match.group(3)
+            
+            # Skip if key is already quoted or is in a quoted string context
+            if '"' in before_context:
+                return match.group(0)
+            
+            return f'{before_context}"{key}"{colon_space}'
+        
+        # Pattern to match unquoted keys: identifier followed by colon
+        # Capture context to avoid matching inside quoted strings
+        pattern = r'(\s|^|[{,])([a-zA-Z_][a-zA-Z0-9_]*)(\s*:\s*)'
+        
+        return re.sub(pattern, quote_key, text)
+    
+    @staticmethod
     def normalize_quotes(text: str) -> str:
         """
         Normalize non-standard quotation marks to standard JSON quotes.
@@ -378,20 +498,78 @@ class JSONPreprocessor:
         # We need a more sophisticated approach for strings with unescaped quotes
         # Let's use a different strategy - find problem patterns specifically
         
-        # Look for the specific pattern: "text "word" text"
-        # This matches strings that start and end with quotes but have unescaped quotes inside
-        problem_pattern = r'"([^"]*"[^"]*)"(?=\s*[,}}\]\n])'
+        # Safety check - don't process very large texts to avoid performance issues
+        if len(text) > 10000:
+            return text
         
-        def fix_problem_quotes(match):
-            full_content = match.group(1)
-            # Only fix if this looks like the problematic pattern
-            if '"' in full_content and not full_content.startswith('\\"'):
-                # Simple fix: escape all internal quotes
-                fixed = full_content.replace('"', '\\"')
-                return f'"{fixed}"'
-            return match.group(0)
+        # Use a character-by-character approach but with safeguards
+        result = []
+        i = 0
+        max_iterations = len(text) * 2  # Safety limit
+        iterations = 0
         
-        text = re.sub(problem_pattern, fix_problem_quotes, text)
+        while i < len(text) and iterations < max_iterations:
+            iterations += 1
+            
+            if text[i] == '"':
+                # Found start of a string - process it carefully
+                result.append('"')
+                i += 1
+                
+                # Process the string content until we find the real closing quote
+                while i < len(text) and iterations < max_iterations:
+                    iterations += 1
+                    
+                    if text[i] == '"':
+                        # Found a potential closing quote
+                        # Check if it's escaped
+                        backslash_count = 0
+                        j = len(result) - 1
+                        while j >= 0 and result[j] == '\\':
+                            backslash_count += 1
+                            j -= 1
+                        
+                        if backslash_count % 2 == 0:
+                            # This quote is not escaped
+                            # Check if this looks like the real end of the string
+                            next_idx = i + 1
+                            
+                            # For a quote to be the real end, it should be followed by
+                            # JSON syntax characters, not more string content
+                            is_real_end = False
+                            if next_idx >= len(text):
+                                is_real_end = True
+                            elif text[next_idx] in ':,}]':
+                                is_real_end = True
+                            elif text[next_idx] in '\n\r\t ':
+                                # Check if after whitespace we have JSON syntax
+                                k = next_idx
+                                while k < len(text) and text[k] in '\n\r\t ':
+                                    k += 1
+                                if k >= len(text) or text[k] in ':,}]':
+                                    is_real_end = True
+                            
+                            if is_real_end:
+                                # This is the closing quote
+                                result.append('"')
+                                i += 1
+                                break
+                            else:
+                                # This is an internal quote that needs escaping
+                                result.append('\\"')
+                                i += 1
+                        else:
+                            # Already escaped quote - keep as is
+                            result.append('"')
+                            i += 1
+                    else:
+                        result.append(text[i])
+                        i += 1
+            else:
+                result.append(text[i])
+                i += 1
+        
+        text = ''.join(result)
         return text
     
     @staticmethod
@@ -445,6 +623,93 @@ class JSONPreprocessor:
                 text += '}'
             elif opener == '[':
                 text += ']'
+        
+        return text
+    
+    @staticmethod
+    def handle_streaming_responses(text: str) -> str:
+        """
+        Handle streaming LLM responses that may have partial JSON.
+        
+        Looks for common patterns in LLM streaming:
+        - Multiple JSON objects on separate lines
+        - "data:" prefixes from server-sent events
+        - Partial JSON at the end of streams
+        """
+        original_text = text
+        
+        # Remove "data:" prefixes from server-sent events
+        lines = text.strip().split('\n')
+        cleaned_lines = []
+        
+        for line in lines:
+            line = line.strip()
+            
+            # Skip empty lines and SSE control messages
+            if not line or line in ['[DONE]', 'event: done', 'event: error']:
+                continue
+            
+            # Remove "data:" prefix from server-sent events
+            if line.startswith('data:'):
+                line = line[5:].strip()
+            
+            cleaned_lines.append(line)
+        
+        if not cleaned_lines:
+            return original_text
+            
+        # Reconstruct the text and check if it looks like complete JSON
+        reconstructed = '\n'.join(cleaned_lines)
+        
+        # If the reconstructed text looks like it contains JSON, use it
+        reconstructed = reconstructed.strip()
+        if reconstructed.startswith(('{', '[')) and reconstructed.endswith(('}', ']')):
+            return reconstructed
+        
+        # Otherwise, try to find individual complete JSON objects on single lines
+        json_objects = []
+        for line in cleaned_lines:
+            line = line.strip()
+            if line.startswith(('{', '[')) and line.endswith(('}', ']')):
+                json_objects.append(line)
+        
+        if json_objects:
+            # Return the longest/most complete JSON object
+            return max(json_objects, key=len)
+        
+        # Fall back to reconstructed text or original
+        return reconstructed if reconstructed else original_text
+    
+    @staticmethod
+    def normalize_whitespace(text: str) -> str:
+        """
+        Normalize excessive whitespace while preserving JSON structure.
+        
+        Common in LLM responses:
+        - Extra spaces around colons and commas
+        - Inconsistent indentation
+        - Mixed tabs and spaces
+        """
+        # Replace tabs with spaces
+        text = text.replace('\t', '    ')
+        
+        # Normalize spaces around JSON punctuation
+        # Add space after comma if missing
+        text = re.sub(r',(\S)', r', \1', text)
+        
+        # Normalize spaces around colons, but only for JSON key-value pairs
+        # Pattern: "key" : value -> "key": value (avoid timestamp colons)
+        text = re.sub(r'"\s*:\s*(?![0-9])', '": ', text)
+        
+        # Also handle unquoted keys: key : value -> key: value (avoid timestamp colons)
+        text = re.sub(r'(\w)\s*:\s*(?![0-9])', r'\1: ', text)
+        
+        # Clean up excessive spaces around commas
+        text = re.sub(r'\s*,\s*', ', ', text)
+        
+        # Clean up line breaks around braces
+        text = re.sub(r'{\s*\n\s*', '{\n    ', text)
+        text = re.sub(r'\n\s*}', '\n}', text)
         
         return text
     
@@ -537,6 +802,9 @@ class JSONPreprocessor:
                 config = PreprocessingConfig.aggressive()  # New default
         
         # Apply preprocessing steps based on config
+        # LLM-specific optimizations - handle streaming first
+        text = cls.handle_streaming_responses(text)
+        
         if config.extract_from_markdown:
             text = cls.extract_from_markdown(text)
         
@@ -545,12 +813,20 @@ class JSONPreprocessor:
         
         if config.unwrap_function_calls:
             text = cls.unwrap_function_calls(text)
+            # Also unwrap inline function calls within the JSON
+            text = cls.unwrap_inline_function_calls(text)
         
         if config.extract_first_json:
             text = cls.extract_first_json(text)
         
         if config.remove_trailing_text:
             text = cls.remove_trailing_text(text)
+        
+        # Quote unquoted values with special characters (before quote normalization)
+        text = cls.quote_unquoted_values(text)
+        
+        # Quote unquoted keys to ensure valid JSON
+        text = cls.quote_unquoted_keys(text)
         
         if config.normalize_quotes:
             text = cls.normalize_quotes(text)
@@ -560,6 +836,8 @@ class JSONPreprocessor:
         
         if config.fix_unescaped_strings:
             text = cls.fix_unescaped_strings(text)
+            # Re-enable quote fixing for LLM responses with nested quotes
+            text = cls.fix_unescaped_quotes_in_strings(text)
         
         if config.handle_incomplete_json:
             text = cls.handle_incomplete_json(text)
@@ -567,5 +845,8 @@ class JSONPreprocessor:
         # Handle sparse arrays as final step
         if config.handle_sparse_arrays:
             text = cls.handle_sparse_arrays(text)
+        
+        # Final LLM optimization - normalize whitespace
+        text = cls.normalize_whitespace(text)
         
         return text.strip()
