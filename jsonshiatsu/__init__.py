@@ -1,7 +1,7 @@
 """
 jsonshiatsu - Therapeutic JSON parser that gently massages malformed JSON into shape.
 
-jsonshiatsu provides loads() and load() functions that are direct drop-in 
+jsonshiatsu provides loads() and load() functions that are direct drop-in
 replacements for Python's json library, but with the healing power to handle
 malformed and non-standard JSON that would normally fail.
 
@@ -21,14 +21,14 @@ Quick Start:
     # Drop-in replacement
     import jsonshiatsu as json
     data = json.loads('{ test: "this works!" }')  # Unquoted keys work!
-    
+
     # Advanced features
     import jsonshiatsu
     result = jsonshiatsu.loads(malformed_json, strict=True)  # Conservative mode
-    
+
     # Legacy API
     result = jsonshiatsu.parse('{ test: "this is a test"}')
-    
+
     # Partial error recovery
     from jsonshiatsu import parse_partial, RecoveryLevel
     result = parse_partial(malformed_json, RecoveryLevel.SKIP_FIELDS)

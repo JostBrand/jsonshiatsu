@@ -3,18 +3,17 @@ Optimized streaming parser for jsonshiatsu with improved performance.
 
 Key optimizations:
 - Deque-based buffer management for O(1) operations
-- Batch character reading to reduce I/O overhead  
+- Batch character reading to reduce I/O overhead
 - Optimized string building with pre-allocation
 - Reduced object creation through pooling
 """
 
-import io
 from collections import deque
-from typing import Any, Dict, Iterator, List, Optional, TextIO, Union
+from typing import Any, Dict, Iterator, List, Optional, TextIO
 
 from ..core.tokenizer import Position, Token, TokenType
 from ..core.transformer import JSONPreprocessor
-from ..security.exceptions import ErrorReporter, ParseError, SecurityError
+from ..security.exceptions import ParseError
 from ..security.limits import LimitValidator
 from ..utils.config import ParseConfig
 
@@ -484,7 +483,7 @@ class OptimizedStreamingTokenParser:
             raise ParseError("Expected '}'", self.current_token().position)
 
         # Final validation
-        self.validator.validate_object_size(key_count, f"object end")
+        self.validator.validate_object_size(key_count, "object end")
 
         return obj
 
@@ -540,6 +539,6 @@ class OptimizedStreamingTokenParser:
             raise ParseError("Expected ']'", self.current_token().position)
 
         # Final validation
-        self.validator.validate_array_size(len(arr), f"array end")
+        self.validator.validate_array_size(len(arr), "array end")
 
         return arr

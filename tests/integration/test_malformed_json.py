@@ -4,10 +4,8 @@ Test cases for handling malformed JSON patterns commonly found in real-world dat
 
 import unittest
 
-import jsonshiatsu
 from jsonshiatsu import parse
 from jsonshiatsu.core.transformer import JSONPreprocessor
-from jsonshiatsu.security.exceptions import ParseError
 
 
 class TestMalformedJSONPatterns(unittest.TestCase):
@@ -64,14 +62,14 @@ class TestMalformedJSONPatterns(unittest.TestCase):
         self.assertEqual(result, {"result": "success"})
 
         # Multiple sentences after JSON
-        json_with_explanation = """{"data": [1, 2, 3]} Here are the requested numbers. 
+        json_with_explanation = """{"data": [1, 2, 3]} Here are the requested numbers.
         They represent the sequence we discussed earlier."""
         result = parse(json_with_explanation)
         self.assertEqual(result, {"data": [1, 2, 3]})
 
         # Newline separated explanation
         json_with_newline = """{"status": "ok"}
-        
+
         Explanation: The request was processed successfully."""
         result = parse(json_with_newline)
         self.assertEqual(result, {"status": "ok"})
@@ -206,7 +204,8 @@ class TestMalformedJSONPatterns(unittest.TestCase):
 
         # File paths with single backslashes (will be fixed by aggressive preprocessing)
         # Using a case that demonstrates the fix_unescaped_strings function
-        file_path = '{"path": "C:\\data\\file"}'  # Single backslashes that aren't escape sequences
+        # Single backslashes that aren't escape sequences
+        file_path = '{"path": "C:\\data\\file"}'
         result = parse(file_path, aggressive=True)
         # The preprocessor should handle this case and parse successfully
         self.assertIsInstance(result, dict)

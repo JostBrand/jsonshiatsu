@@ -6,7 +6,6 @@ various malformed formats commonly found in real-world data.
 """
 
 import re
-from typing import List, Optional, Tuple
 
 
 class JSONPreprocessor:
@@ -222,7 +221,8 @@ class JSONPreprocessor:
             (r'\bNumberLong\s*\(\s*"?([^)"]+)"?\s*\)', r"\1"),
             (r'\bNumberInt\s*\(\s*"?([^)"]+)"?\s*\)', r"\1"),
             (r'\bNumberDecimal\s*\(\s*"([^"]+)"\s*\)', r'"\1"'),
-            # Handle function calls without quotes (common in LLM output) - more restrictive
+            # Handle function calls without quotes (common in LLM output) - more
+            # restrictive
             (r'\bDate\s*\(\s*([^)"\s,][^),]*)\s*\)', r'"\1"'),
             (r'\bObjectId\s*\(\s*([^)"\s,][^),]*)\s*\)', r'"\1"'),
             (r'\bUUID\s*\(\s*([^)"\s,][^),]*)\s*\)', r'"\1"'),
@@ -254,7 +254,8 @@ class JSONPreprocessor:
             after = match.group(3) if len(match.groups()) >= 3 else ""
 
             # Check if value needs quoting
-            # Quote if it contains special characters that make it invalid as an identifier
+            # Quote if it contains special characters that make it invalid as an
+            # identifier
             needs_quoting = bool(re.search(r"[-./:#@?&=+%]", value))
 
             # Also quote if it looks like a URL, version number, or complex identifier
@@ -441,7 +442,8 @@ class JSONPreprocessor:
                     # Contains common path components
                     any(indicator in content_lower for indicator in file_indicators)
                     or
-                    # Contains drive letters (C:, D:, etc.) - must be start of string or after space/slash
+                    # Contains drive letters (C:, D:, etc.) - must be start of string or
+                    # after space/slash
                     re.search(r"(?:^|[\s/\\])[a-zA-Z]:", content)
                 )
             else:
@@ -450,11 +452,13 @@ class JSONPreprocessor:
                     # Contains common path components
                     any(indicator in content_lower for indicator in file_indicators)
                     or
-                    # Contains drive letters (C:, D:, etc.) - must be start of string or after space/slash
+                    # Contains drive letters (C:, D:, etc.) - must be start of string or
+                    # after space/slash
                     re.search(r"(?:^|[\s/\\])[a-zA-Z]:", content)
                     or
                     # Contains actual path separators (not JSON escape sequences)
-                    # Only consider it a path if there are backslashes that are NOT valid JSON escapes
+                    # Only consider it a path if there are backslashes that are NOT
+                    # valid JSON escapes
                     (
                         content.count("\\") >= 2
                         and re.search(r'\\(?![\\"/bfnrtu]|u[0-9a-fA-F]{4})', content)
@@ -626,7 +630,8 @@ class JSONPreprocessor:
         """
         text = text.strip()
 
-        # Track opening/closing brackets and braces with positions to handle nesting correctly
+        # Track opening/closing brackets and braces with positions to handle
+        # nesting correctly
         stack = []
         in_string = False
         string_char = None
@@ -683,7 +688,8 @@ class JSONPreprocessor:
         """
         original_text = text
 
-        # Don't apply streaming logic to markdown code blocks or obvious non-streaming content
+        # Don't apply streaming logic to markdown code blocks or obvious
+        # non-streaming content
         if "```" in text or "json" in text.lower()[:100]:
             return original_text
 
@@ -895,7 +901,8 @@ class JSONPreprocessor:
                 fixed_content = fixed_content.replace(",,", ", null,")
 
             # Handle trailing comma: convert to null for jsonshiatsu's permissive behavior
-            # But don't add null if content already ends with null (from consecutive comma handling)
+            # But don't add null if content already ends with null (from consecutive
+            # comma handling)
             stripped = fixed_content.rstrip()
             if stripped.endswith(",") and not stripped.endswith("null,"):
                 fixed_content = stripped.rstrip(",") + ", null"

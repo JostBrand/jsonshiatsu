@@ -78,7 +78,7 @@ def main():
     try:
         large_obj = "{" + ", ".join(f'"{i}": {i}' for i in range(10)) + "}"
         result = jsonshiatsu.parse(large_obj, config=config)
-        print(f"✗ Large object should have failed")
+        print("✗ Large object should have failed")
     except SecurityError as e:
         print(f"✓ Large object blocked: {type(e).__name__}")
 
@@ -96,7 +96,7 @@ def main():
     try:
         large_array = "[" + ", ".join(str(i) for i in range(10)) + "]"
         result = jsonshiatsu.parse(large_array, config=config)
-        print(f"✗ Large array should have failed")
+        print("✗ Large array should have failed")
     except SecurityError as e:
         print(f"✓ Large array blocked: {type(e).__name__}")
 
@@ -129,7 +129,7 @@ def main():
         }
         """
         result = jsonshiatsu.parse(safe_json, config=production_config)
-        print(f"✓ Production-safe JSON parsed successfully")
+        print("✓ Production-safe JSON parsed successfully")
         print(f"  Status: {result['api_response']['status']}")
         print(f"  Data count: {len(result['api_response']['data'])}")
     except Exception as e:

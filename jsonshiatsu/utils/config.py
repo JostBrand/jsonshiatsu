@@ -5,7 +5,7 @@ This module defines security limits and configuration options for safe JSON pars
 """
 
 from dataclasses import dataclass
-from typing import Optional, Set, Union
+from typing import Optional, Set
 
 
 @dataclass

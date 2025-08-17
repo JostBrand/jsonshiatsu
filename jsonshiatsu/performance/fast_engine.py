@@ -11,7 +11,7 @@ from typing import Any, Dict, List, Optional, TextIO, Union
 
 from ..security.exceptions import ErrorReporter, ParseError, SecurityError
 from ..security.limits import LimitValidator
-from ..utils.config import ParseConfig, ParseLimits
+from ..utils.config import ParseConfig
 from .fast_streaming import OptimizedStreamingParser
 from .fast_tokenizer import create_lexer
 from .fast_transformer import OptimizedJSONPreprocessor

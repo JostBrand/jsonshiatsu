@@ -13,7 +13,7 @@ from ..security.exceptions import (
     SecurityError,
 )
 from ..security.limits import LimitValidator
-from ..utils.config import ParseConfig, ParseLimits
+from ..utils.config import ParseConfig
 from .tokenizer import Lexer, Token, TokenType
 from .transformer import JSONPreprocessor
 
@@ -93,7 +93,8 @@ class Parser:
             self.advance()
 
             # Handle function call patterns like Date("2025-08-01")
-            # If identifier is followed by a string, treat as function call and return the string value
+            # If identifier is followed by a string, treat as function call and return
+            # the string value
             if self.current_token().type == TokenType.STRING and identifier_value in [
                 "Date",
                 "RegExp",
@@ -569,7 +570,8 @@ def _parse_internal(text: Union[str, TextIO], config: ParseConfig) -> Any:
                         try:
                             return json.loads(text)
                         except json.JSONDecodeError:
-                            # Final attempt - try to extract just the JSON part more aggressively
+                            # Final attempt - try to extract just the JSON part more
+                            # aggressively
                             try:
                                 cleaned = JSONPreprocessor.extract_first_json(
                                     preprocessed_text
@@ -767,7 +769,7 @@ class JSONDecoder(json.JSONDecoder):
             try:
                 json.loads(s[idx:])
                 end_idx = len(s)
-            except json.JSONDecodeError as e:
+            except json.JSONDecodeError:
                 # Try to estimate end position
                 end_idx = idx + len(s[idx:].lstrip())
             return result, end_idx

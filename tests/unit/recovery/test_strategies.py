@@ -6,7 +6,6 @@ Tests focus on resilient JSON parsing that continues despite errors.
 
 import unittest
 
-from jsonshiatsu.core.tokenizer import Position
 from jsonshiatsu.recovery.strategies import (
     ErrorSeverity,
     PartialParseError,
@@ -194,7 +193,7 @@ class TestPartialParser(unittest.TestCase):
 
     def test_error_recording(self):
         """Test error recording functionality."""
-        from jsonshiatsu.core.tokenizer import Lexer, Position
+        from jsonshiatsu.core.tokenizer import Lexer
 
         lexer = Lexer('{"key": "value"}')
         tokens = lexer.get_all_tokens()

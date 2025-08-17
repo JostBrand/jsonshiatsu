@@ -1,7 +1,7 @@
 """
 Test cases for IEEE 754 floating point edge cases and number handling.
 
-These tests ensure jsonshiatsu correctly handles overflow, underflow, 
+These tests ensure jsonshiatsu correctly handles overflow, underflow,
 special values, and extreme precision cases.
 """
 
@@ -63,7 +63,7 @@ class TestIEEE754EdgeCases(unittest.TestCase):
                     or flex_result["big"] == float("inf")
                     or isinstance(flex_result["big"], str)
                 )
-        except:
+        except BaseException:
             # If standard JSON fails, jsonshiatsu should handle gracefully
             pass
 
@@ -85,7 +85,7 @@ class TestIEEE754EdgeCases(unittest.TestCase):
 
             # Should handle similarly to standard JSON
             self.assertEqual(type(std_result["tiny"]), type(flex_result["tiny"]))
-        except:
+        except BaseException:
             pass
 
     def test_max_finite_values(self):
@@ -192,7 +192,8 @@ class TestIEEE754EdgeCases(unittest.TestCase):
             # Expected behavior for security limits
             pass
         except Exception as e:
-            # Check if it's a wrapped SecurityError (JSONDecodeError wrapping SecurityError)
+            # Check if it's a wrapped SecurityError (JSONDecodeError wrapping
+            # SecurityError)
             if hasattr(e, "__cause__") and isinstance(e.__cause__, SecurityError):
                 # This is expected - SecurityError wrapped in JSONDecodeError
                 pass
@@ -206,7 +207,7 @@ class TestIEEE754EdgeCases(unittest.TestCase):
         try:
             result = jsonshiatsu.loads('{"hex": 0xFF}')
             self.assertIn("hex", result)
-        except:
+        except BaseException:
             # May not be supported, that's okay
             pass
 
@@ -214,7 +215,7 @@ class TestIEEE754EdgeCases(unittest.TestCase):
         try:
             result = jsonshiatsu.loads('{"octal": 0o755}')
             self.assertIn("octal", result)
-        except:
+        except BaseException:
             # May not be supported, that's okay
             pass
 
@@ -222,7 +223,7 @@ class TestIEEE754EdgeCases(unittest.TestCase):
         try:
             result = jsonshiatsu.loads('{"binary": 0b1010}')
             self.assertIn("binary", result)
-        except:
+        except BaseException:
             # May not be supported, that's okay
             pass
 
@@ -245,7 +246,7 @@ class TestNumberFormattingEdgeCases(unittest.TestCase):
         try:
             result = jsonshiatsu.loads('{"positive": +123}')
             self.assertEqual(result, {"positive": 123})
-        except:
+        except BaseException:
             # Plus prefix may not be supported
             pass
 
@@ -259,7 +260,7 @@ class TestNumberFormattingEdgeCases(unittest.TestCase):
         try:
             result = jsonshiatsu.loads('{"trailing": 5.}')
             self.assertEqual(result, {"trailing": 5.0})
-        except:
+        except BaseException:
             # May not be supported
             pass
 
@@ -285,7 +286,7 @@ class TestNumberFormattingEdgeCases(unittest.TestCase):
             result = jsonshiatsu.loads('{"invalid": 123.45.67}')
             # If it doesn't raise an error, check it's handled somehow
             self.assertIn("invalid", result)
-        except:
+        except BaseException:
             # Expected to fail
             pass
 
@@ -294,7 +295,7 @@ class TestNumberFormattingEdgeCases(unittest.TestCase):
         try:
             result = jsonshiatsu.loads('{"empty_exp": 123e}')
             self.assertIn("empty_exp", result)
-        except:
+        except BaseException:
             # Expected to fail
             pass
 

@@ -333,7 +333,7 @@ class TestPreprocessingPipeline(unittest.TestCase):
 
         # Newline separated
         newline_text = """{"status": "ok"}
-        
+
         Explanation: Everything worked fine."""
         result = JSONPreprocessor.remove_trailing_text(newline_text)
         # Should keep the JSON part
@@ -440,7 +440,7 @@ class TestPreprocessingPipeline(unittest.TestCase):
                     'age': 25
                 },
                 {
-                    name: "Bob", 
+                    name: "Bob",
                     'age': 30
                 }
             ],

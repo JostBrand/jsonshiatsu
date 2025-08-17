@@ -38,38 +38,38 @@ ULTIMATE_MALFORMED_JSON = """Here's some explanatory text before the JSON...
 {
     // 1. Unquoted object keys
     unquoted_key: "This key has no quotes",
-    
+
     // 2. Single quotes
     'single_quoted_key': 'single quoted value',
-    
-    // 3. Mixed quotes  
+
+    // 3. Mixed quotes
     "double_key": 'mixed quote styles work',
-    
+
     // 4. Trailing commas in objects
     "trailing_comma_obj": {
         "inner": "value",
     },
-    
+
     // 5. Unquoted string values
     unquoted_value_key: unquoted_string_value,
-    
+
     // 6. Embedded quotes with proper escaping
     "message": "He said \\"Hello!\\" and she replied \\"Hi there!\\"",
-    
+
     // 7. Newlines in strings
     "multiline": "line1\\nline2\\nline3",
-    
+
     // 8. Function calls in values
     "timestamp": Date("2025-08-16T10:30:00Z"),
     "object_id": ObjectId("507f1f77bcf86cd799439011"),
     "regex": RegExp("^[a-z]+$"),
     "uuid": UUID("550e8400-e29b-41d4-a716-446655440000"),
     "iso_date": ISODate("2025-01-01T00:00:00.000Z"),
-    
+
     // 9. Non-standard boolean/null values
     "python_booleans": {
         "active": True,
-        "disabled": False, 
+        "disabled": False,
         "empty": None
     },
     "yes_no_values": {
@@ -77,34 +77,34 @@ ULTIMATE_MALFORMED_JSON = """Here's some explanatory text before the JSON...
         "disabled": no
     },
     "undefined_val": undefined,
-    
+
     // 10. Non-standard quotes (smart quotes, guillemets, CJK, backticks)
     "smart_quotes": "Hello "world" with smart quotes",
     "guillemets": «French style quotes»,
     "cjk_quotes": 「Japanese style quotes」,
     "backticks": `Backtick quoted string`,
-    
+
     // 11. Trailing commas in arrays
     "simple_array": ["item1", "item2", "item3",],
-    
+
     // 12. Sparse arrays with various patterns
     "sparse_arrays": {
         "basic": [1,, 3],
-        "multiple": [1,,, 4], 
+        "multiple": [1,,, 4],
         "leading": [,, 3],
         "trailing": [1, 2,],
         "empty_sparse": [,,],
         "single_sparse": [,],
         "with_spaces": [1, , 3, , 5]
     },
-    
+
     // 13. JavaScript-style comments (both types demonstrated)
     "comments_demo": "value", /* this is a block comment */
-    
+
     // 14. All escape sequences
     "escapes": {
         "newline": "line1\\nline2",
-        "tab": "col1\\tcol2", 
+        "tab": "col1\\tcol2",
         "carriage": "line1\\rline2",
         "backspace": "text\\bdelete",
         "formfeed": "page1\\fpage2",
@@ -113,7 +113,7 @@ ULTIMATE_MALFORMED_JSON = """Here's some explanatory text before the JSON...
         "slash": "http:\\/\\/example.com",
         "unicode": "Hello \\u4F60\\u597D World! \\uD83D\\uDE00"
     },
-    
+
     // 15. Scientific notation
     "numbers": {
         "scientific": 1.23e-10,

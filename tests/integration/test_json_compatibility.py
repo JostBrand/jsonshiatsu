@@ -104,7 +104,7 @@ class TestLoadsCompatibility(unittest.TestCase):
             flex_result = jsonshiatsu.loads(test_json, parse_constant=parse_constant)
             # Should apply the custom parser
             self.assertIn("inf", flex_result)
-        except:
+        except BaseException:
             # If not supported yet, that's documented
             pass
 
@@ -138,7 +138,7 @@ class TestLoadsCompatibility(unittest.TestCase):
             std_strict = json.loads(test_json, strict=True)
             flex_strict = jsonshiatsu.loads(test_json, strict=True)
             self.assertEqual(std_strict, flex_strict)
-        except:
+        except BaseException:
             # Both should behave the same way
             with self.assertRaises(Exception):
                 jsonshiatsu.loads(test_json, strict=True)
@@ -163,7 +163,7 @@ class TestLoadsCompatibility(unittest.TestCase):
             self.assertEqual(std_result, flex_result)
             self.assertTrue(std_result.get("_custom_decoded"))
             self.assertTrue(flex_result.get("_custom_decoded"))
-        except:
+        except BaseException:
             # cls parameter might not be fully supported yet
             pass
 
@@ -290,7 +290,7 @@ class TestLoadCompatibility(unittest.TestCase):
                     with open(binary_file, "rb") as f2:
                         flex_result = jsonshiatsu.load(f2)
                     self.assertEqual(std_result, flex_result)
-                except:
+                except BaseException:
                     # Binary mode might not be supported the same way
                     pass
         finally:

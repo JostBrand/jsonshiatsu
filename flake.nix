@@ -21,6 +21,7 @@
           black
           isort
           flake8
+          autopep8
           mypy
           build
           # Add core dependencies to avoid pip externally managed errors
@@ -117,6 +118,7 @@
             git
             curl
             jq
+            ruff
             
             gnumake
             tree

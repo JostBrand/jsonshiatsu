@@ -3,15 +3,12 @@ Optimized lexer for jsonshiatsu - high-performance tokenization.
 
 This module provides optimized tokenization with significant performance improvements:
 - String building using lists instead of concatenation
-- Cached string lengths to avoid repeated len() calls  
+- Cached string lengths to avoid repeated len() calls
 - Optimized character access patterns
 - Reduced object creation overhead
 """
 
-import re
-from dataclasses import dataclass
-from enum import Enum
-from typing import Iterator, List, NamedTuple, Optional
+from typing import Iterator, List
 
 # Import types from original lexer
 from ..core.tokenizer import Position, Token, TokenType

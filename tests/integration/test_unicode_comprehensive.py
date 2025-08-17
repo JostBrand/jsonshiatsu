@@ -103,7 +103,8 @@ class TestUnicodeEscapeSequences(unittest.TestCase):
                     flex_result = jsonshiatsu.loads(test_case)
                     self.assertEqual(std_result, flex_result)
                 except json.JSONDecodeError:
-                    # If standard JSON fails, jsonshiatsu should still handle it gracefully
+                    # If standard JSON fails, jsonshiatsu should still handle it
+                    # gracefully
                     flex_result = jsonshiatsu.loads(test_case)
                     self.assertIsInstance(flex_result, dict)
 

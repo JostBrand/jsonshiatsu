@@ -5,12 +5,11 @@ This module provides streaming capabilities for parsing large JSON documents
 without loading the entire content into memory.
 """
 
-import io
-from typing import Any, Dict, Iterator, List, Optional, TextIO, Union
+from typing import Any, Dict, Iterator, List, TextIO
 
-from ..core.tokenizer import Lexer, Position, Token, TokenType
+from ..core.tokenizer import Position, Token, TokenType
 from ..core.transformer import JSONPreprocessor
-from ..security.exceptions import ErrorReporter, ParseError, SecurityError
+from ..security.exceptions import ErrorReporter, ParseError
 from ..security.limits import LimitValidator
 
 # Parser import moved to avoid circular imports
@@ -99,7 +98,8 @@ class StreamingParser:
             initial_chunk, self.config.aggressive, self.config.preprocessing_config
         )
 
-        # If preprocessing made significant changes, we need to preprocess the whole stream
+        # If preprocessing made significant changes, we need to preprocess the
+        # whole stream
         if (
             len(preprocessed_sample) != len(initial_chunk)
             or preprocessed_sample != initial_chunk

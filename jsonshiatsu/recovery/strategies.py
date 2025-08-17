@@ -5,13 +5,12 @@ This module implements resilient JSON parsing that continues processing despite
 syntax errors, collecting valid data while reporting detailed error information.
 """
 
-import traceback
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import Any, Dict, List, Optional, Tuple, Union
+from typing import Any, Dict, List, Optional, Tuple
 
 from ..core.tokenizer import Lexer, Position, Token, TokenType
-from ..security.exceptions import ErrorReporter, ParseError
+from ..security.exceptions import ErrorReporter
 from ..security.limits import LimitValidator
 from ..utils.config import ParseConfig
 
@@ -740,8 +739,6 @@ def parse_partial(
     preprocessed_text = JSONPreprocessor.preprocess(
         text, aggressive=config.aggressive, config=config.preprocessing_config
     )
-
-    from ..core.tokenizer import Lexer
 
     lexer = Lexer(preprocessed_text)
     tokens = lexer.get_all_tokens()

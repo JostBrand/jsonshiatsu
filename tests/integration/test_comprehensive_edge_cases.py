@@ -213,7 +213,7 @@ class TestComplexRealWorldScenarios(unittest.TestCase):
             }
         }
         ```
-        
+
         This response contains multiple formatting issues but should be parseable."""
 
         result = jsonshiatsu.loads(llm_response)
@@ -249,7 +249,7 @@ class TestComplexRealWorldScenarios(unittest.TestCase):
                 version: "v2",
                 'endpoints': [
                     "/users",
-                    "/posts", 
+                    "/posts",
                     "/comments"
                 ],
                 rate_limit: {
@@ -499,7 +499,7 @@ class TestPerformanceEdgeCases(unittest.TestCase):
             result = jsonshiatsu.loads(large_object)
             self.assertEqual(len(result), size)
             self.assertEqual(result["key0"], "value0")
-            self.assertEqual(result[f"key{size-1}"], f"value{size-1}")
+            self.assertEqual(result[f"key{size - 1}"], f"value{size - 1}")
 
         except SecurityError:
             # Expected if key count limit is exceeded

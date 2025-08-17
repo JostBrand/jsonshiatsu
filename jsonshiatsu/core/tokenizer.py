@@ -2,7 +2,6 @@
 Lexer for jsonshiatsu - tokenizes input strings for parsing.
 """
 
-import re
 from dataclasses import dataclass
 from enum import Enum
 from typing import Iterator, List, NamedTuple, Optional

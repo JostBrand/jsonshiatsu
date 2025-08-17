@@ -5,7 +5,7 @@ This module provides detailed error information with position tracking and conte
 """
 
 from dataclasses import dataclass
-from typing import List, Optional, Union
+from typing import List, Optional
 
 from ..core.tokenizer import Position
 

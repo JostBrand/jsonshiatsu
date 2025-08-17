@@ -7,12 +7,9 @@ Tests focus on error paths, edge cases, and fallback mechanisms in the parsing e
 import json
 import unittest
 from io import StringIO
-from unittest.mock import MagicMock, patch
 
 import jsonshiatsu
-from jsonshiatsu.core.engine import Lexer, Parser, _parse_internal, load, loads
-from jsonshiatsu.security.exceptions import ErrorReporter, ParseError, SecurityError
-from jsonshiatsu.security.limits import LimitValidator
+from jsonshiatsu.security.exceptions import ParseError, SecurityError
 from jsonshiatsu.utils.config import ParseConfig, ParseLimits
 
 

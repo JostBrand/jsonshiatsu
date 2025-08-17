@@ -10,7 +10,7 @@ Key optimizations:
 
 import re
 from functools import lru_cache
-from typing import List, Optional, Pattern, Tuple
+from typing import Tuple
 
 
 class OptimizedJSONPreprocessor:

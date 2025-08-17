@@ -8,7 +8,7 @@ import os
 import tempfile
 
 import jsonshiatsu
-from jsonshiatsu import ParseConfig, StreamingParser
+from jsonshiatsu import ParseConfig
 
 
 def main():
@@ -133,7 +133,7 @@ def main():
     eng_dept = result["company"]["departments"][0]
     sales_dept = result["company"]["departments"][1]
 
-    print(f"✓ Complex structure parsed:")
+    print("✓ Complex structure parsed:")
     print(f"  Company: {result['company']['name']}")
     print(f"  Engineering employees: {len(eng_dept['employees'])}")
     print(f"  Sales employees: {len(sales_dept['employees'])}")

@@ -5,7 +5,6 @@ Command-line interface for jsonshiatsu.
 import argparse
 import json
 import sys
-from typing import TextIO
 
 from . import parse
 from .parser import ParseError

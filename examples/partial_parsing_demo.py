@@ -6,8 +6,6 @@ instead of failing completely on the first error.
 """
 
 from jsonshiatsu import (
-    ErrorSeverity,
-    ParseConfig,
     RecoveryAction,
     RecoveryLevel,
     extract_valid_data,
