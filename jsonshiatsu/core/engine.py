@@ -50,7 +50,7 @@ class Parser:
         if token.type == TokenType.STRING:
             self.validator.validate_string_length(token.value, f"line {token.position.line}")
             self.advance()
-            return token.value
+            return self._unescape_string(token.value)
         
         elif token.type == TokenType.NUMBER:
             self.validator.validate_number_length(token.value, f"line {token.position.line}")
@@ -197,13 +197,19 @@ class Parser:
         while True:
             self.skip_whitespace_and_newlines()
             
+            # Check if we've reached the end of the array
+            if self.current_token().type == TokenType.RBRACKET:
+                break
+            
             try:
                 value = self.parse_value()
                 arr.append(value)
                 
                 self.validator.validate_array_items(len(arr))
             except ParseError:
-                arr.append(None)
+                # Only append None if we're not at array boundary
+                if self.current_token().type not in [TokenType.RBRACKET, TokenType.COMMA]:
+                    arr.append(None)
             
             self.skip_whitespace_and_newlines()
             
@@ -211,6 +217,7 @@ class Parser:
                 self.advance()
                 self.skip_whitespace_and_newlines()
                 
+                # Handle trailing comma - if next token is closing bracket, exit
                 if self.current_token().type == TokenType.RBRACKET:
                     break
                     
@@ -235,6 +242,53 @@ class Parser:
         """Parse the tokens into a Python data structure."""
         self.skip_whitespace_and_newlines()
         return self.parse_value()
+    
+    def _unescape_string(self, s: str) -> str:
+        """Process standard JSON escape sequences in string values."""
+        if '\\' not in s:
+            return s
+        
+        result = []
+        i = 0
+        while i < len(s):
+            if s[i] == '\\' and i + 1 < len(s):
+                next_char = s[i + 1]
+                if next_char == '"':
+                    result.append('"')
+                elif next_char == '\\':
+                    result.append('\\')
+                elif next_char == '/':
+                    result.append('/')
+                elif next_char == 'b':
+                    result.append('\b')
+                elif next_char == 'f':
+                    result.append('\f')
+                elif next_char == 'n':
+                    result.append('\n')
+                elif next_char == 'r':
+                    result.append('\r')
+                elif next_char == 't':
+                    result.append('\t')
+                elif next_char == 'u' and i + 5 < len(s):
+                    # Unicode escape sequence \uXXXX
+                    try:
+                        hex_digits = s[i + 2:i + 6]
+                        unicode_char = chr(int(hex_digits, 16))
+                        result.append(unicode_char)
+                        i += 5  # Skip u and 4 hex digits
+                    except (ValueError, OverflowError):
+                        # Invalid unicode escape, keep as-is
+                        result.append(s[i])
+                else:
+                    # Unknown escape sequence, keep the backslash
+                    result.append(s[i])
+                    result.append(next_char)
+                i += 2
+            else:
+                result.append(s[i])
+                i += 1
+        
+        return ''.join(result)
     
     def _raise_parse_error(self, message: str, position, suggestions: Optional[List[str]] = None):
         if self.error_reporter:
@@ -504,3 +558,99 @@ def _apply_object_pairs_hook_recursively(obj: Any, hook: Callable[[List[tuple]],
         return [_apply_object_pairs_hook_recursively(item, hook) for item in obj]
     else:
         return obj
+
+
+def dump(obj: Any, fp: TextIO, *, skipkeys=False, ensure_ascii=True, check_circular=True,
+         allow_nan=True, cls=None, indent=None, separators=None, default=None, 
+         sort_keys=False, **kw) -> None:
+    """
+    Serialize obj as a JSON formatted stream to fp (drop-in replacement for json.dump).
+    
+    This function delegates to the standard json.dump() since jsonshiatsu focuses on 
+    parsing/repair, not serialization.
+    """
+    return json.dump(obj, fp, skipkeys=skipkeys, ensure_ascii=ensure_ascii, 
+                     check_circular=check_circular, allow_nan=allow_nan, cls=cls,
+                     indent=indent, separators=separators, default=default,
+                     sort_keys=sort_keys, **kw)
+
+
+def dumps(obj: Any, *, skipkeys=False, ensure_ascii=True, check_circular=True,
+          allow_nan=True, cls=None, indent=None, separators=None, default=None,
+          sort_keys=False, **kw) -> str:
+    """
+    Serialize obj to a JSON formatted str (drop-in replacement for json.dumps).
+    
+    This function delegates to the standard json.dumps() since jsonshiatsu focuses on 
+    parsing/repair, not serialization.
+    """
+    return json.dumps(obj, skipkeys=skipkeys, ensure_ascii=ensure_ascii,
+                      check_circular=check_circular, allow_nan=allow_nan, cls=cls,
+                      indent=indent, separators=separators, default=default,
+                      sort_keys=sort_keys, **kw)
+
+
+class JSONDecoder(json.JSONDecoder):
+    """
+    Drop-in replacement for json.JSONDecoder that uses jsonshiatsu for parsing.
+    
+    This class extends the standard JSONDecoder but uses jsonshiatsu's enhanced
+    parsing capabilities while maintaining full API compatibility.
+    """
+    
+    def __init__(self, *, object_hook=None, parse_float=None, parse_int=None, 
+                 parse_constant=None, strict=True, object_pairs_hook=None):
+        # Don't call super().__init__ to avoid setting up standard decoder
+        self.object_hook = object_hook
+        self.parse_float = parse_float
+        self.parse_int = parse_int
+        self.parse_constant = parse_constant
+        self.strict = strict
+        self.object_pairs_hook = object_pairs_hook
+        # Store original scan_once for compatibility
+        self.scan_once = self._scan_once
+    
+    def decode(self, s, _w=None):
+        """Decode a JSON string using jsonshiatsu."""
+        return loads(
+            s,
+            object_hook=self.object_hook,
+            parse_float=self.parse_float,
+            parse_int=self.parse_int,
+            parse_constant=self.parse_constant,
+            object_pairs_hook=self.object_pairs_hook,
+            strict=self.strict
+        )
+    
+    def raw_decode(self, s, idx=0):
+        """Decode a JSON string starting at idx."""
+        try:
+            result = self.decode(s[idx:])
+            # Find end position by re-parsing with standard json to get exact position
+            try:
+                json.loads(s[idx:])
+                end_idx = len(s)
+            except json.JSONDecodeError as e:
+                # Try to estimate end position
+                end_idx = idx + len(s[idx:].lstrip())
+            return result, end_idx
+        except json.JSONDecodeError:
+            raise
+    
+    def _scan_once(self, s, idx):
+        """Internal method for compatibility."""
+        return self.raw_decode(s, idx)
+
+
+class JSONEncoder(json.JSONEncoder):
+    """
+    Drop-in replacement for json.JSONEncoder.
+    
+    Since jsonshiatsu focuses on parsing/repair rather than encoding,
+    this class simply delegates to the standard JSONEncoder.
+    """
+    pass
+
+
+# Import JSONDecodeError from standard json module for compatibility
+JSONDecodeError = json.JSONDecodeError

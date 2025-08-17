@@ -34,7 +34,7 @@ Quick Start:
     result = parse_partial(malformed_json, RecoveryLevel.SKIP_FIELDS)
 """
 
-from .core.engine import parse, loads, load
+from .core.engine import parse, loads, load, dump, dumps, JSONDecoder, JSONEncoder, JSONDecodeError
 from .utils.config import ParseConfig, ParseLimits, PreprocessingConfig
 from .security.exceptions import ParseError, SecurityError
 from .streaming.processor import StreamingParser
@@ -44,9 +44,20 @@ from .recovery.strategies import (
 )
 
 __version__ = "0.1.0"
+__author__ = "jsonshiatsu contributors"
+
+# Import additional attributes from standard json module for full compatibility
+import json as _json
+# Import standard json module attributes for compatibility
+try:
+    _json_version = _json.__version__ 
+    _json_author = _json.__author__
+except AttributeError:
+    _json_version = "2.0.9"
+    _json_author = "Bob Ippolito <bob@redivi.com>"
 __all__ = [
-    # Drop-in json replacement functions
-    "loads", "load", 
+    # Drop-in json replacement functions and classes
+    "loads", "load", "dump", "dumps", "JSONDecoder", "JSONEncoder", "JSONDecodeError",
     # Legacy jsonshiatsu functions  
     "parse", "parse_partial", "extract_valid_data", "parse_with_fallback",
     # Configuration classes

@@ -199,18 +199,19 @@ class JSONPreprocessor:
         # Common MongoDB/JavaScript function patterns
         patterns = [
             # Date functions with quoted strings - more precise patterns
-            (r'\bDate\s*\(\s*"([^"]+)"\s*\)', r'"\1"'),
-            (r'\bISODate\s*\(\s*"([^"]+)"\s*\)', r'"\1"'),
-            (r'\bnew\s+Date\s*\(\s*"([^"]+)"\s*\)', r'"\1"'),
+            (r'\bDate\s*\(\s*"([^"]*)"\s*\)', r'"\1"'),
+            (r'\bISODate\s*\(\s*"([^"]*)"\s*\)', r'"\1"'),
+            (r'\bnew\s+Date\s*\(\s*"([^"]*)"\s*\)', r'"\1"'),
             
             # ObjectId and UUID functions
-            (r'\bObjectId\s*\(\s*"([^"]+)"\s*\)', r'"\1"'),
-            (r'\bUUID\s*\(\s*"([^"]+)"\s*\)', r'"\1"'),
-            (r'\bBinData\s*\(\s*\d+\s*,\s*"([^"]+)"\s*\)', r'"\1"'),
+            (r'\bObjectId\s*\(\s*"([^"]*)"\s*\)', r'"\1"'),
+            (r'\bUUID\s*\(\s*"([^"]*)"\s*\)', r'"\1"'),
+            (r'\bBinData\s*\(\s*\d+\s*,\s*"([^"]*)"\s*\)', r'"\1"'),
             
-            # RegExp functions - handle both forms
-            (r'\bRegExp\s*\(\s*"([^"]+)"\s*,\s*"([^"]*)"\s*\)', r'"/\1/\2"'),
-            (r'\bRegExp\s*\(\s*"([^"]+)"\s*\)', r'"/\1/"'),
+            # RegExp functions - handle both forms  
+            # Extract just the pattern string, not regex delimiters
+            (r'\bRegExp\s*\(\s*"([^"]*)"\s*,\s*"([^"]*)"\s*\)', r'"\1"'),
+            (r'\bRegExp\s*\(\s*"([^"]*)"\s*\)', r'"\1"'),
             
             # MongoDB specific functions
             (r'\bNumberLong\s*\(\s*"?([^)"]+)"?\s*\)', r'\1'),
@@ -638,6 +639,10 @@ class JSONPreprocessor:
         """
         original_text = text
         
+        # Don't apply streaming logic to markdown code blocks or obvious non-streaming content
+        if '```' in text or 'json' in text.lower()[:100]:
+            return original_text
+        
         # Remove "data:" prefixes from server-sent events
         lines = text.strip().split('\n')
         cleaned_lines = []
@@ -694,18 +699,91 @@ class JSONPreprocessor:
         text = text.replace('\t', '    ')
         
         # Normalize spaces around JSON punctuation
-        # Add space after comma if missing
-        text = re.sub(r',(\S)', r', \1', text)
+        # Add space after comma if missing, but only in JSON structural context
+        # Properly handle quoted strings
+        def normalize_commas_outside_strings(text):
+            result = []
+            i = 0
+            in_string = False
+            string_char = None
+            
+            while i < len(text):
+                char = text[i]
+                
+                if not in_string and char in ['"', "'"]:
+                    in_string = True
+                    string_char = char
+                    result.append(char)
+                elif in_string and char == string_char:
+                    # Check if this quote is escaped
+                    escaped = False
+                    j = i - 1
+                    while j >= 0 and text[j] == '\\':
+                        escaped = not escaped
+                        j -= 1
+                    
+                    if not escaped:
+                        in_string = False
+                        string_char = None
+                    result.append(char)
+                elif not in_string and char == ',' and i + 1 < len(text) and text[i + 1] not in [' ', '}', ']']:
+                    # Add space after comma in JSON structure
+                    result.append(', ')
+                else:
+                    result.append(char)
+                
+                i += 1
+            
+            return ''.join(result)
+        
+        text = normalize_commas_outside_strings(text)
         
         # Normalize spaces around colons, but only for JSON key-value pairs
         # Pattern: "key" : value -> "key": value (avoid timestamp colons)
         text = re.sub(r'"\s*:\s*(?![0-9])', '": ', text)
         
-        # Also handle unquoted keys: key : value -> key: value (avoid timestamp colons)
-        text = re.sub(r'(\w)\s*:\s*(?![0-9])', r'\1: ', text)
+        # Handle unquoted keys with quote-aware processing
+        def normalize_colons_outside_strings(text):
+            result = []
+            i = 0
+            in_string = False
+            string_char = None
+            
+            while i < len(text):
+                char = text[i]
+                
+                if not in_string and char in ['"', "'"]:
+                    in_string = True
+                    string_char = char
+                    result.append(char)
+                elif in_string and char == string_char:
+                    # Check if this quote is escaped
+                    escaped = False
+                    j = i - 1
+                    while j >= 0 and text[j] == '\\':
+                        escaped = not escaped
+                        j -= 1
+                    
+                    if not escaped:
+                        in_string = False
+                        string_char = None
+                    result.append(char)
+                elif not in_string and char == ':' and i > 0 and text[i-1].isalnum():
+                    # Add space after colon in JSON structure (but not timestamps)
+                    if i + 1 < len(text) and not text[i + 1].isdigit():
+                        result.append(': ')
+                    else:
+                        result.append(char)
+                else:
+                    result.append(char)
+                
+                i += 1
+            
+            return ''.join(result)
         
-        # Clean up excessive spaces around commas
-        text = re.sub(r'\s*,\s*', ', ', text)
+        text = normalize_colons_outside_strings(text)
+        
+        # Comma spacing is already handled by normalize_commas_outside_strings above
         
         # Clean up line breaks around braces
         text = re.sub(r'{\s*\n\s*', '{\n    ', text)
@@ -767,16 +845,23 @@ class JSONPreprocessor:
             while ',,' in fixed_content:
                 fixed_content = fixed_content.replace(',,', ', null,')
             
-            # Handle trailing comma after comma: ,] -> , null] 
-            # But be careful not to double-add if we already processed double commas
-            if fixed_content.strip().endswith(',') and not fixed_content.strip().endswith('null,'):
-                fixed_content = fixed_content.rstrip().rstrip(',') + ', null'
+            # Handle trailing comma: convert to null for jsonshiatsu's permissive behavior
+            # But don't add null if content already ends with null (from consecutive comma handling)
+            stripped = fixed_content.rstrip()
+            if stripped.endswith(',') and not stripped.endswith('null,'):
+                fixed_content = stripped.rstrip(',') + ', null'
             
             return '[' + fixed_content + ']'
         
-        # Match array patterns: [...] 
-        array_pattern = r'\[([^\[\]]*?)\]'
-        text = re.sub(array_pattern, fix_sparse_in_array, text)
+        # Handle sparse arrays at multiple levels
+        # First pass: handle simple arrays (no nested brackets)
+        simple_array_pattern = r'\[([^\[\]]*?)\]'
+        text = re.sub(simple_array_pattern, fix_sparse_in_array, text)
+        
+        # Second pass: handle remaining sparse commas between elements at any level
+        # Convert ", ," patterns to ", null," at any level  
+        while ',,' in text:
+            text = text.replace(',,', ', null,')
         
         return text
     
@@ -822,6 +907,10 @@ class JSONPreprocessor:
         if config.remove_trailing_text:
             text = cls.remove_trailing_text(text)
         
+        # Normalize boolean/null BEFORE quoting so they're recognized as JSON literals
+        if config.normalize_boolean_null:
+            text = cls.normalize_boolean_null(text)
+        
         # Quote unquoted values with special characters (before quote normalization)
         text = cls.quote_unquoted_values(text)
         
@@ -830,9 +919,6 @@ class JSONPreprocessor:
         
         if config.normalize_quotes:
             text = cls.normalize_quotes(text)
-        
-        if config.normalize_boolean_null:
-            text = cls.normalize_boolean_null(text)
         
         if config.fix_unescaped_strings:
             text = cls.fix_unescaped_strings(text)
