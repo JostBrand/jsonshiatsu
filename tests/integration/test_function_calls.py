@@ -6,6 +6,7 @@ function call patterns like Date("2025-08-01") are handled correctly.
 """
 
 import unittest
+
 import jsonshiatsu
 from jsonshiatsu.security.exceptions import JSONDecodeError
 

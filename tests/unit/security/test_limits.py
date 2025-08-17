@@ -5,14 +5,15 @@ Tests focus on preventing resource exhaustion attacks and validating input const
 """
 
 import unittest
-from jsonshiatsu.security.limits import LimitValidator
+
 from jsonshiatsu.security.exceptions import SecurityError
+from jsonshiatsu.security.limits import LimitValidator
 from jsonshiatsu.utils.config import ParseLimits
 
 
 class TestLimitValidator(unittest.TestCase):
     """Test LimitValidator functionality for security constraints."""
-    
+
     def setUp(self):
         """Set up test validator with custom limits."""
         self.limits = ParseLimits(
@@ -21,7 +22,7 @@ class TestLimitValidator(unittest.TestCase):
             max_number_length=20,
             max_nesting_depth=5,
             max_array_items=10,
-            max_object_keys=10
+            max_object_keys=10,
         )
         self.validator = LimitValidator(self.limits)
 
@@ -35,7 +36,7 @@ class TestLimitValidator(unittest.TestCase):
         large_text = "x" * 1001  # Exceeds limit of 1000
         with self.assertRaises(SecurityError) as cm:
             self.validator.validate_input_size(large_text)
-        
+
         error = cm.exception
         self.assertIn("Input size 1001 exceeds limit 1000", str(error))
 
@@ -49,7 +50,7 @@ class TestLimitValidator(unittest.TestCase):
         long_string = "x" * 51  # Exceeds limit of 50
         with self.assertRaises(SecurityError) as cm:
             self.validator.validate_string_length(long_string, "line 5")
-        
+
         error = cm.exception
         self.assertIn("String length 51 exceeds limit 50", str(error))
         self.assertIn("at line 5", str(error))
@@ -59,7 +60,7 @@ class TestLimitValidator(unittest.TestCase):
         long_string = "x" * 51
         with self.assertRaises(SecurityError) as cm:
             self.validator.validate_string_length(long_string)
-        
+
         error = cm.exception
         self.assertIn("String length 51 exceeds limit 50", str(error))
         self.assertNotIn(" at ", str(error))
@@ -74,7 +75,7 @@ class TestLimitValidator(unittest.TestCase):
         long_number = "1" * 21  # Exceeds limit of 20
         with self.assertRaises(SecurityError) as cm:
             self.validator.validate_number_length(long_number, "column 15")
-        
+
         error = cm.exception
         self.assertIn("Number length 21 exceeds limit 20", str(error))
         self.assertIn("at column 15", str(error))
@@ -84,7 +85,7 @@ class TestLimitValidator(unittest.TestCase):
         # Enter structures within the limit (5)
         for i in range(5):
             self.validator.enter_structure()
-        
+
         # Should be at max depth but not over
         self.assertEqual(self.validator.nesting_depth, 5)
 
@@ -93,11 +94,11 @@ class TestLimitValidator(unittest.TestCase):
         # Enter 5 structures to reach limit
         for i in range(5):
             self.validator.enter_structure()
-        
+
         # Attempting to enter 6th structure should fail
         with self.assertRaises(SecurityError) as cm:
             self.validator.enter_structure()
-        
+
         error = cm.exception
         self.assertIn("Nesting depth 6 exceeds limit 5", str(error))
 
@@ -107,10 +108,10 @@ class TestLimitValidator(unittest.TestCase):
         self.validator.enter_structure()
         self.validator.enter_structure()
         self.assertEqual(self.validator.nesting_depth, 2)
-        
+
         self.validator.exit_structure()
         self.assertEqual(self.validator.nesting_depth, 1)
-        
+
         self.validator.exit_structure()
         self.assertEqual(self.validator.nesting_depth, 0)
 
@@ -123,7 +124,7 @@ class TestLimitValidator(unittest.TestCase):
         """Test array items validation exceeding limits."""
         with self.assertRaises(SecurityError) as cm:
             self.validator.validate_array_items(11)  # Exceeds limit of 10
-        
+
         error = cm.exception
         self.assertIn("Array item count 11 exceeds limit 10", str(error))
 
@@ -136,7 +137,7 @@ class TestLimitValidator(unittest.TestCase):
         """Test object keys validation exceeding limits."""
         with self.assertRaises(SecurityError) as cm:
             self.validator.validate_object_keys(11)  # Exceeds limit of 10
-        
+
         error = cm.exception
         self.assertIn("Object key count 11 exceeds limit 10", str(error))
 
@@ -145,11 +146,11 @@ class TestLimitValidator(unittest.TestCase):
         # Create two validators
         validator1 = LimitValidator(self.limits)
         validator2 = LimitValidator(self.limits)
-        
+
         # Modify one validator's state
         validator1.enter_structure()
         validator1.enter_structure()
-        
+
         # Other validator should be unaffected
         self.assertEqual(validator1.nesting_depth, 2)
         self.assertEqual(validator2.nesting_depth, 0)
@@ -158,7 +159,7 @@ class TestLimitValidator(unittest.TestCase):
         """Test item counting functionality."""
         # Test item counting with count_item method
         self.assertEqual(self.validator.total_items, 0)
-        
+
         # Count some items
         self.validator.count_item()
         self.validator.count_item()
@@ -167,11 +168,11 @@ class TestLimitValidator(unittest.TestCase):
 
 class TestParseConfigLimits(unittest.TestCase):
     """Test ParseLimits configuration integration."""
-    
+
     def test_default_limits(self):
         """Test default limit values."""
         limits = ParseLimits()
-        
+
         # Verify reasonable defaults exist
         self.assertGreater(limits.max_input_size, 0)
         self.assertGreater(limits.max_string_length, 0)
@@ -183,11 +184,9 @@ class TestParseConfigLimits(unittest.TestCase):
     def test_custom_limits(self):
         """Test custom limit configuration."""
         custom_limits = ParseLimits(
-            max_input_size=2000,
-            max_string_length=100,
-            max_nesting_depth=10
+            max_input_size=2000, max_string_length=100, max_nesting_depth=10
         )
-        
+
         self.assertEqual(custom_limits.max_input_size, 2000)
         self.assertEqual(custom_limits.max_string_length, 100)
         self.assertEqual(custom_limits.max_nesting_depth, 10)
@@ -196,15 +195,15 @@ class TestParseConfigLimits(unittest.TestCase):
         """Test validator using custom limits."""
         custom_limits = ParseLimits(max_nesting_depth=2)
         validator = LimitValidator(custom_limits)
-        
+
         # Should allow up to 2 levels
         validator.enter_structure()
         validator.enter_structure()
-        
+
         # Third level should fail
         with self.assertRaises(SecurityError):
             validator.enter_structure()
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     unittest.main()

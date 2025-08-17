@@ -21,51 +21,49 @@ Examples:
   jsonshiatsu -f input.json
   echo '{ test: "value"}' | jsonshiatsu
   jsonshiatsu --no-fallback -f malformed.json
-        """
+        """,
     )
-    
+
     parser.add_argument(
-        "-f", "--file",
-        type=argparse.FileType('r'),
+        "-f",
+        "--file",
+        type=argparse.FileType("r"),
         default=sys.stdin,
-        help="Input file (default: stdin)"
+        help="Input file (default: stdin)",
     )
-    
+
     parser.add_argument(
         "--no-fallback",
         action="store_true",
-        help="Disable fallback to standard JSON parser"
+        help="Disable fallback to standard JSON parser",
     )
-    
+
     parser.add_argument(
         "--duplicate-keys",
         action="store_true",
-        help="Handle duplicate keys by creating arrays"
+        help="Handle duplicate keys by creating arrays",
     )
-    
+
     parser.add_argument(
-        "--indent",
-        type=int,
-        default=2,
-        help="JSON output indentation (default: 2)"
+        "--indent", type=int, default=2, help="JSON output indentation (default: 2)"
     )
-    
+
     args = parser.parse_args()
-    
+
     try:
         # Read input
         input_text = args.file.read()
-        
+
         # Parse using jsonshiatsu
         result = parse(
             input_text,
             fallback=not args.no_fallback,
-            duplicate_keys=args.duplicate_keys
+            duplicate_keys=args.duplicate_keys,
         )
-        
+
         # Output formatted JSON
         print(json.dumps(result, indent=args.indent, ensure_ascii=False))
-        
+
     except ParseError as e:
         print(f"Parse error: {e}", file=sys.stderr)
         sys.exit(1)

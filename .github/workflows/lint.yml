@@ -1,4 +1,4 @@
-name: Test Package
+name: Lint Code
 
 on:
   push:
@@ -7,20 +7,17 @@ on:
     branches: [ main, master ]
 
 jobs:
-  test:
+  lint:
     runs-on: ubuntu-latest
-    strategy:
-      matrix:
-        python-version: ["3.8", "3.9", "3.10", "3.11", "3.12", "3.13"]
-        
+    
     steps:
     - name: Checkout code
       uses: actions/checkout@v4
       
-    - name: Set up Python ${{ matrix.python-version }}
+    - name: Set up Python
       uses: actions/setup-python@v4
       with:
-        python-version: ${{ matrix.python-version }}
+        python-version: '3.11'
         
     - name: Install Poetry
       uses: snok/install-poetry@v1
@@ -32,8 +29,9 @@ jobs:
     - name: Install dependencies
       run: poetry install
       
-    - name: Run tests
-      run: poetry run pytest tests/ -v
+    - name: Run Black formatter check
+      run: poetry run black --check jsonshiatsu tests examples
       
-    - name: Test showcase example
-      run: poetry run python examples/ultimate_malformed_example.py
+    - name: Run isort check (non-blocking)
+      run: poetry run isort --check-only jsonshiatsu tests examples || echo "Import sorting differences found but continuing..."
+      continue-on-error: true

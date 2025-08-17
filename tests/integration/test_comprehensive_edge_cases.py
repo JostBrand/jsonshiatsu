@@ -6,6 +6,7 @@ stress testing, and real-world complex scenarios.
 """
 
 import unittest
+
 import jsonshiatsu
 from jsonshiatsu.security.exceptions import JSONDecodeError, SecurityError
 

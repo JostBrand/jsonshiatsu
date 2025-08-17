@@ -6,35 +6,37 @@ without loading the entire content into memory.
 """
 
 import io
-from typing import Any, Iterator, TextIO, Union, Optional, Dict, List
-from ..core.tokenizer import Lexer, Token, TokenType, Position
+from typing import Any, Dict, Iterator, List, Optional, TextIO, Union
+
+from ..core.tokenizer import Lexer, Position, Token, TokenType
+from ..core.transformer import JSONPreprocessor
+from ..security.exceptions import ErrorReporter, ParseError, SecurityError
+from ..security.limits import LimitValidator
+
 # Parser import moved to avoid circular imports
 from ..utils.config import ParseConfig
-from ..security.limits import LimitValidator
-from ..security.exceptions import ErrorReporter, ParseError, SecurityError
-from ..core.transformer import JSONPreprocessor
 
 
 class StreamingLexer:
     """Streaming tokenizer that reads from a file-like object."""
-    
+
     def __init__(self, stream: TextIO, buffer_size: int = 8192):
         self.stream = stream
         self.buffer_size = buffer_size
         self.buffer = ""
         self.position = Position(1, 1)
         self.eof_reached = False
-        
+
     def _read_chunk(self) -> str:
         """Read next chunk from stream."""
         if self.eof_reached:
             return ""
-        
+
         chunk = self.stream.read(self.buffer_size)
         if not chunk:
             self.eof_reached = True
         return chunk
-    
+
     def _ensure_buffer(self, min_chars: int) -> bool:
         """Ensure buffer has at least min_chars available."""
         while len(self.buffer) < min_chars and not self.eof_reached:
@@ -43,34 +45,34 @@ class StreamingLexer:
                 break
             self.buffer += chunk
         return len(self.buffer) >= min_chars
-    
+
     def peek(self, offset: int = 0) -> str:
         """Peek at character at offset without consuming."""
         if not self._ensure_buffer(offset + 1):
             return ""
-        
+
         if offset < len(self.buffer):
             return self.buffer[offset]
         return ""
-    
+
     def advance(self) -> str:
         """Consume and return next character."""
         if not self._ensure_buffer(1):
             return ""
-        
+
         if not self.buffer:
             return ""
-        
+
         char = self.buffer[0]
         self.buffer = self.buffer[1:]
-        
-        if char == '\n':
+
+        if char == "\n":
             self.position = Position(self.position.line + 1, 1)
         else:
             self.position = Position(self.position.line, self.position.column + 1)
-        
+
         return char
-    
+
     def current_position(self) -> Position:
         """Get current position in stream."""
         return self.position
@@ -78,284 +80,313 @@ class StreamingLexer:
 
 class StreamingParser:
     """Streaming JSON parser for large files."""
-    
+
     def __init__(self, config: ParseConfig):
         self.config = config
         self.validator = LimitValidator(config.limits)
-    
+
     def parse_stream(self, stream: TextIO) -> Any:
         """Parse JSON from a stream."""
         # For very large streams, we need to be careful about preprocessing
         # Read the stream in chunks and apply minimal preprocessing
-        
+
         # First, check if we can read a small portion to detect the format
         initial_chunk = stream.read(self.config.streaming_threshold // 10)
         stream.seek(0)  # Reset stream
-        
+
         # Apply preprocessing to the initial chunk to detect patterns
-        preprocessed_sample = JSONPreprocessor.preprocess(initial_chunk, self.config.aggressive, self.config.preprocessing_config)
-        
+        preprocessed_sample = JSONPreprocessor.preprocess(
+            initial_chunk, self.config.aggressive, self.config.preprocessing_config
+        )
+
         # If preprocessing made significant changes, we need to preprocess the whole stream
-        if len(preprocessed_sample) != len(initial_chunk) or preprocessed_sample != initial_chunk:
+        if (
+            len(preprocessed_sample) != len(initial_chunk)
+            or preprocessed_sample != initial_chunk
+        ):
             return self._parse_with_preprocessing(stream)
         else:
             return self._parse_direct_stream(stream)
-    
+
     def _parse_with_preprocessing(self, stream: TextIO) -> Any:
         """Parse stream that requires preprocessing."""
         # Read entire stream for preprocessing (fallback for complex cases)
         content = stream.read()
         self.validator.validate_input_size(content)
-        
+
         # Apply preprocessing
-        preprocessed = JSONPreprocessor.preprocess(content, self.config.aggressive, self.config.preprocessing_config)
-        
+        preprocessed = JSONPreprocessor.preprocess(
+            content, self.config.aggressive, self.config.preprocessing_config
+        )
+
         # Parse using regular parser (import here to avoid circular imports)
         from . import parse
+
         return parse(
             preprocessed,
             fallback=self.config.fallback,
             duplicate_keys=self.config.duplicate_keys,
-            aggressive=False  # Already preprocessed
+            aggressive=False,  # Already preprocessed
         )
-    
+
     def _parse_direct_stream(self, stream: TextIO) -> Any:
         """Parse stream directly without full preprocessing."""
         streaming_lexer = StreamingLexer(stream)
         tokens = list(self._tokenize_stream(streaming_lexer))
-        
+
         parser = StreamingTokenParser(tokens, self.config, self.validator)
         return parser.parse()
-    
+
     def _tokenize_stream(self, lexer: StreamingLexer) -> Iterator[Token]:
         """Tokenize from streaming lexer."""
         while True:
             # Skip whitespace
-            while lexer.peek() and lexer.peek() in ' \t\r':
+            while lexer.peek() and lexer.peek() in " \t\r":
                 lexer.advance()
-            
+
             if not lexer.peek():
                 break
-            
+
             char = lexer.peek()
             pos = lexer.current_position()
-            
+
             # Handle different token types
-            if char == '\n':
+            if char == "\n":
                 lexer.advance()
                 yield Token(TokenType.NEWLINE, char, pos)
-            
-            elif char in '{}[],:':
+
+            elif char in "{}[],:":
                 lexer.advance()
                 token_type = {
-                    '{': TokenType.LBRACE,
-                    '}': TokenType.RBRACE,
-                    '[': TokenType.LBRACKET,
-                    ']': TokenType.RBRACKET,
-                    ':': TokenType.COLON,
-                    ',': TokenType.COMMA
+                    "{": TokenType.LBRACE,
+                    "}": TokenType.RBRACE,
+                    "[": TokenType.LBRACKET,
+                    "]": TokenType.RBRACKET,
+                    ":": TokenType.COLON,
+                    ",": TokenType.COMMA,
                 }[char]
                 yield Token(token_type, char, pos)
-            
-            elif char in '"\'':
+
+            elif char in "\"'":
                 string_value = self._read_string_stream(lexer, char)
                 yield Token(TokenType.STRING, string_value, pos)
-            
-            elif char.isdigit() or char == '-' or char == '.':
+
+            elif char.isdigit() or char == "-" or char == ".":
                 number_value = self._read_number_stream(lexer)
                 yield Token(TokenType.NUMBER, number_value, pos)
-            
-            elif char.isalpha() or char == '_':
+
+            elif char.isalpha() or char == "_":
                 identifier = self._read_identifier_stream(lexer)
-                
-                if identifier in ['true', 'false']:
+
+                if identifier in ["true", "false"]:
                     yield Token(TokenType.BOOLEAN, identifier, pos)
-                elif identifier == 'null':
+                elif identifier == "null":
                     yield Token(TokenType.NULL, identifier, pos)
                 else:
                     yield Token(TokenType.IDENTIFIER, identifier, pos)
-            
+
             else:
                 # Skip unknown character
                 lexer.advance()
-        
+
         yield Token(TokenType.EOF, "", lexer.current_position())
-    
+
     def _read_string_stream(self, lexer: StreamingLexer, quote_char: str) -> str:
         """Read string from stream."""
         result = ""
         lexer.advance()
-        
+
         while True:
             char = lexer.peek()
             if not char:
                 break
-            
+
             if char == quote_char:
                 lexer.advance()
                 break
-            elif char == '\\':
+            elif char == "\\":
                 lexer.advance()
                 next_char = lexer.peek()
                 if next_char:
                     escape_map = {
-                        'n': '\n', 't': '\t', 'r': '\r', 'b': '\b', 'f': '\f',
-                        '"': '"', "'": "'", '\\': '\\', '/': '/'
+                        "n": "\n",
+                        "t": "\t",
+                        "r": "\r",
+                        "b": "\b",
+                        "f": "\f",
+                        '"': '"',
+                        "'": "'",
+                        "\\": "\\",
+                        "/": "/",
                     }
                     result += escape_map.get(next_char, next_char)
                     lexer.advance()
             else:
                 result += lexer.advance()
-            
+
             # Validate string length as we build it
             self.validator.validate_string_length(result, f"line {lexer.position.line}")
-        
+
         return result
-    
+
     def _read_number_stream(self, lexer: StreamingLexer) -> str:
         """Read number from stream."""
         result = ""
-        
+
         # Handle negative sign
-        if lexer.peek() == '-':
+        if lexer.peek() == "-":
             result += lexer.advance()
-        
+
         # Read digits
-        while lexer.peek() and (lexer.peek().isdigit() or lexer.peek() in '.eE+-'):
+        while lexer.peek() and (lexer.peek().isdigit() or lexer.peek() in ".eE+-"):
             result += lexer.advance()
-            
+
             # Validate number length
             self.validator.validate_number_length(result, f"line {lexer.position.line}")
-        
+
         return result
-    
+
     def _read_identifier_stream(self, lexer: StreamingLexer) -> str:
         """Read identifier from stream."""
         result = ""
-        while lexer.peek() and (lexer.peek().isalnum() or lexer.peek() in '_$'):
+        while lexer.peek() and (lexer.peek().isalnum() or lexer.peek() in "_$"):
             result += lexer.advance()
         return result
 
 
 class StreamingTokenParser:
     """Parser that works with streaming tokens and enforces limits."""
-    
-    def __init__(self, tokens: List[Token], config: ParseConfig, validator: LimitValidator):
+
+    def __init__(
+        self, tokens: List[Token], config: ParseConfig, validator: LimitValidator
+    ):
         self.tokens = tokens
         self.pos = 0
         self.config = config
         self.validator = validator
         self.error_reporter = None
-        
+
         # Create error reporter if we have the original text
-        if hasattr(config, '_original_text'):
-            self.error_reporter = ErrorReporter(config._original_text, config.max_error_context)
-    
+        if hasattr(config, "_original_text"):
+            self.error_reporter = ErrorReporter(
+                config._original_text, config.max_error_context
+            )
+
     def current_token(self) -> Token:
         """Get current token."""
         if self.pos >= len(self.tokens):
-            return self.tokens[-1] if self.tokens else Token(TokenType.EOF, "", Position(1, 1))
+            return (
+                self.tokens[-1]
+                if self.tokens
+                else Token(TokenType.EOF, "", Position(1, 1))
+            )
         return self.tokens[self.pos]
-    
+
     def advance(self) -> Token:
         """Advance to next token."""
         token = self.current_token()
         if self.pos < len(self.tokens) - 1:
             self.pos += 1
         return token
-    
+
     def skip_whitespace_and_newlines(self):
         """Skip whitespace and newline tokens."""
-        while (self.current_token().type in [TokenType.WHITESPACE, TokenType.NEWLINE] and
-               self.current_token().type != TokenType.EOF):
+        while (
+            self.current_token().type in [TokenType.WHITESPACE, TokenType.NEWLINE]
+            and self.current_token().type != TokenType.EOF
+        ):
             self.advance()
-    
+
     def parse(self) -> Any:
         """Parse tokens into Python data structure."""
         self.skip_whitespace_and_newlines()
         return self.parse_value()
-    
+
     def parse_value(self) -> Any:
         """Parse a JSON value with validation."""
         self.skip_whitespace_and_newlines()
         token = self.current_token()
-        
+
         self.validator.increment_total_items(f"line {token.position.line}")
-        
+
         if token.type == TokenType.STRING:
             self.advance()
             return token.value
-        
+
         elif token.type == TokenType.NUMBER:
             self.advance()
             value = token.value
-            if '.' in value or 'e' in value.lower():
+            if "." in value or "e" in value.lower():
                 return float(value)
             return int(value)
-        
+
         elif token.type == TokenType.BOOLEAN:
             self.advance()
-            return token.value == 'true'
-        
+            return token.value == "true"
+
         elif token.type == TokenType.NULL:
             self.advance()
             return None
-        
+
         elif token.type == TokenType.IDENTIFIER:
             self.advance()
             return token.value
-        
+
         elif token.type == TokenType.LBRACE:
             return self.parse_object()
-        
+
         elif token.type == TokenType.LBRACKET:
             return self.parse_array()
-        
+
         else:
             self._raise_parse_error(f"Unexpected token: {token.type}", token.position)
-    
+
     def parse_object(self) -> Dict[str, Any]:
         """Parse object with size validation."""
         self.skip_whitespace_and_newlines()
-        
+
         if self.current_token().type != TokenType.LBRACE:
             self._raise_parse_error("Expected '{'", self.current_token().position)
-        
+
         self.validator.enter_structure(f"line {self.current_token().position.line}")
         self.advance()
         self.skip_whitespace_and_newlines()
-        
+
         obj = {}
         key_count = 0
-        
+
         if self.current_token().type == TokenType.RBRACE:
             self.advance()
             self.validator.exit_structure()
             return obj
-        
+
         while True:
             self.skip_whitespace_and_newlines()
-            
+
             key_token = self.current_token()
             if key_token.type in [TokenType.STRING, TokenType.IDENTIFIER]:
                 key = key_token.value
                 self.advance()
                 key_count += 1
-                
-                self.validator.validate_object_size(key_count, f"line {key_token.position.line}")
+
+                self.validator.validate_object_size(
+                    key_count, f"line {key_token.position.line}"
+                )
             else:
                 self._raise_parse_error("Expected object key", key_token.position)
-            
+
             self.skip_whitespace_and_newlines()
-            
+
             if self.current_token().type != TokenType.COLON:
-                self._raise_parse_error("Expected ':' after key", self.current_token().position)
-            
+                self._raise_parse_error(
+                    "Expected ':' after key", self.current_token().position
+                )
+
             self.advance()
             self.skip_whitespace_and_newlines()
-            
+
             value = self.parse_value()
-            
+
             if key in obj and not self.config.duplicate_keys:
                 obj[key] = value
             elif key in obj and self.config.duplicate_keys:
@@ -364,77 +395,85 @@ class StreamingTokenParser:
                 obj[key].append(value)
             else:
                 obj[key] = value
-            
+
             self.skip_whitespace_and_newlines()
-            
+
             if self.current_token().type == TokenType.COMMA:
                 self.advance()
                 self.skip_whitespace_and_newlines()
-                
+
                 if self.current_token().type == TokenType.RBRACE:
                     break
             elif self.current_token().type == TokenType.RBRACE:
                 break
             else:
                 if self.current_token().type == TokenType.EOF:
-                    self._raise_parse_error("Unexpected end of input, expected '}'", self.current_token().position)
-        
+                    self._raise_parse_error(
+                        "Unexpected end of input, expected '}'",
+                        self.current_token().position,
+                    )
+
         if self.current_token().type == TokenType.RBRACE:
             self.advance()
             self.validator.exit_structure()
         else:
             self._raise_parse_error("Expected '}'", self.current_token().position)
-        
+
         return obj
-    
+
     def parse_array(self) -> List[Any]:
         """Parse array with size validation."""
         self.skip_whitespace_and_newlines()
-        
+
         if self.current_token().type != TokenType.LBRACKET:
             self._raise_parse_error("Expected '['", self.current_token().position)
-        
+
         self.validator.enter_structure(f"line {self.current_token().position.line}")
         self.advance()
         self.skip_whitespace_and_newlines()
-        
+
         arr = []
-        
+
         if self.current_token().type == TokenType.RBRACKET:
             self.advance()
             self.validator.exit_structure()
             return arr
-        
+
         while True:
             self.skip_whitespace_and_newlines()
-            
+
             value = self.parse_value()
             arr.append(value)
-            
-            self.validator.validate_array_size(len(arr), f"line {self.current_token().position.line}")
-            
+
+            self.validator.validate_array_size(
+                len(arr), f"line {self.current_token().position.line}"
+            )
+
             self.skip_whitespace_and_newlines()
-            
+
             if self.current_token().type == TokenType.COMMA:
                 self.advance()
                 self.skip_whitespace_and_newlines()
-                
+
                 if self.current_token().type == TokenType.RBRACKET:
                     break
             elif self.current_token().type == TokenType.RBRACKET:
                 break
             else:
                 if self.current_token().type == TokenType.EOF:
-                    self._raise_parse_error("Unexpected end of input, expected ']'", self.current_token().position)
-        
+                    self._raise_parse_error(
+                        "Unexpected end of input, expected ']'",
+                        self.current_token().position,
+                    )
+
         if self.current_token().type == TokenType.RBRACKET:
             self.advance()
             self.validator.exit_structure()
         else:
             self._raise_parse_error("Expected ']'", self.current_token().position)
-        
+
         return arr
-    
+
     def _raise_parse_error(self, message: str, position: Position):
         """Raise a parse error with enhanced reporting if available."""
         if self.error_reporter:
