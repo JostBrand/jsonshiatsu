@@ -48,7 +48,8 @@ class TestFunctionCallPatterns(unittest.TestCase):
 
         # ObjectId in array
         result = jsonshiatsu.loads(
-            '{"ids": [ObjectId("507f1f77bcf86cd799439011"), ObjectId("507f1f77bcf86cd799439012")]}'
+            '{"ids": [ObjectId("507f1f77bcf86cd799439011"), '
+            'ObjectId("507f1f77bcf86cd799439012")]}'
         )
         expected = {"ids": ["507f1f77bcf86cd799439011", "507f1f77bcf86cd799439012"]}
         self.assertEqual(result, expected)

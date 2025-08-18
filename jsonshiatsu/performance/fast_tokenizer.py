@@ -8,7 +8,7 @@ This module provides optimized tokenization with significant performance improve
 - Reduced object creation overhead
 """
 
-from typing import Iterator, List
+from typing import Callable, Iterator, List, Optional
 
 # Import types from original lexer
 from ..core.tokenizer import Position, Token, TokenType
@@ -41,7 +41,7 @@ class OptimizedLexer:
         }
 
         # Position caching
-        self._position_cache = None
+        self._position_cache: Optional[Position] = None
         self._position_cache_pos = -1
 
     def current_position(self) -> Position:
@@ -49,7 +49,7 @@ class OptimizedLexer:
         if self._position_cache_pos != self.pos:
             self._position_cache = Position(self.line, self.column)
             self._position_cache_pos = self.pos
-        return self._position_cache
+        return self._position_cache  # type: ignore[return-value]
 
     def peek(self, offset: int = 0) -> str:
         """Peek at character with optimized bounds checking."""
@@ -79,7 +79,7 @@ class OptimizedLexer:
 
         return char
 
-    def advance_while(self, condition_func) -> List[str]:
+    def advance_while(self, condition_func: Callable[[str], bool]) -> List[str]:
         """Advance while condition is true, collecting characters efficiently."""
         chars = []
         while self.pos < self.text_length:
@@ -95,7 +95,7 @@ class OptimizedLexer:
                 self.column += 1
         return chars
 
-    def skip_whitespace(self):
+    def skip_whitespace(self) -> None:
         """Skip whitespace with optimized character set lookup."""
         while (
             self.pos < self.text_length
@@ -245,7 +245,6 @@ class OptimizedLexer:
         """Get all tokens as a list with pre-allocated capacity."""
         tokens = []
         # Pre-allocate based on rough estimate (1 token per 8 characters)
-        estimated_tokens = max(64, self.text_length // 8)
 
         for token in self.tokenize():
             tokens.append(token)

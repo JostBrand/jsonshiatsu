@@ -14,7 +14,7 @@ from ..security.exceptions import (
 )
 from ..security.limits import LimitValidator
 from ..utils.config import ParseConfig
-from .tokenizer import Lexer, Token, TokenType
+from .tokenizer import Lexer, Position, Token, TokenType
 from .transformer import JSONPreprocessor
 
 
@@ -28,7 +28,9 @@ class Parser:
         self.tokens = tokens
         self.pos = 0
         self.config = config
-        self.validator = LimitValidator(config.limits)
+        from ..utils.config import ParseLimits
+
+        self.validator = LimitValidator(config.limits or ParseLimits())
         self.error_reporter = error_reporter
 
     def current_token(self) -> Token:
@@ -48,7 +50,7 @@ class Parser:
             self.pos += 1
         return token
 
-    def skip_whitespace_and_newlines(self):
+    def skip_whitespace_and_newlines(self) -> None:
         while (
             self.current_token().type in [TokenType.WHITESPACE, TokenType.NEWLINE]
             and self.current_token().type != TokenType.EOF
@@ -134,7 +136,7 @@ class Parser:
         self.advance()
         self.skip_whitespace_and_newlines()
 
-        obj = {}
+        obj: dict = {}
 
         if self.current_token().type == TokenType.RBRACE:
             self.advance()
@@ -232,7 +234,7 @@ class Parser:
         self.advance()
         self.skip_whitespace_and_newlines()
 
-        arr = []
+        arr: list = []
 
         if self.current_token().type == TokenType.RBRACKET:
             self.advance()
@@ -344,8 +346,8 @@ class Parser:
         return "".join(result)
 
     def _raise_parse_error(
-        self, message: str, position, suggestions: Optional[List[str]] = None
-    ):
+        self, message: str, position: Position, suggestions: Optional[List[str]] = None
+    ) -> None:
         if self.error_reporter:
             raise self.error_reporter.create_parse_error(message, position, suggestions)
         else:
@@ -355,7 +357,7 @@ class Parser:
 def loads(
     s: Union[str, bytes, bytearray],
     *,
-    cls=None,
+    cls: Optional[Any] = None,
     object_hook: Optional[Callable[[Dict[str, Any]], Any]] = None,
     parse_float: Optional[Callable[[str], Any]] = None,
     parse_int: Optional[Callable[[str], Any]] = None,
@@ -364,7 +366,7 @@ def loads(
     # jsonshiatsu-specific parameters
     strict: bool = False,
     config: Optional[ParseConfig] = None,
-    **kw,
+    **kw: Any,
 ) -> Any:
     """
     Deserialize a JSON string to a Python object (drop-in replacement for json.loads).
@@ -436,7 +438,7 @@ def loads(
 def load(
     fp: TextIO,
     *,
-    cls=None,
+    cls: Optional[Any] = None,
     object_hook: Optional[Callable[[Dict[str, Any]], Any]] = None,
     parse_float: Optional[Callable[[str], Any]] = None,
     parse_int: Optional[Callable[[str], Any]] = None,
@@ -445,7 +447,7 @@ def load(
     # jsonshiatsu-specific parameters
     strict: bool = False,
     config: Optional[ParseConfig] = None,
-    **kw,
+    **kw: Any,
 ) -> Any:
     """
     Deserialize a JSON file to a Python object (drop-in replacement for json.load).
@@ -483,7 +485,8 @@ def parse(
     """
     Parse a JSON-like string or stream into a Python data structure.
 
-    This is the legacy jsonshiatsu API. For drop-in json replacement, use loads()/load().
+    This is the legacy jsonshiatsu API. For drop-in json replacement, use
+    loads()/load().
 
     Args:
         text: The JSON-like string to parse, or a file-like object for streaming
@@ -514,12 +517,15 @@ def _parse_internal(text: Union[str, TextIO], config: ParseConfig) -> Any:
         from ..streaming.processor import StreamingParser
 
         streaming_parser = StreamingParser(config)
-        return streaming_parser.parse_stream(text)
+        if isinstance(text, str):
+            stream: TextIO = io.StringIO(text)
+        else:
+            stream = text
+        return streaming_parser.parse_stream(stream)
 
     if isinstance(text, str):
-        config.limits.max_input_size and LimitValidator(
-            config.limits
-        ).validate_input_size(text)
+        if config.limits and config.limits.max_input_size:
+            LimitValidator(config.limits).validate_input_size(text)
 
         if len(text) > config.streaming_threshold:
             stream = io.StringIO(text)
@@ -528,7 +534,8 @@ def _parse_internal(text: Union[str, TextIO], config: ParseConfig) -> Any:
             streaming_parser = StreamingParser(config)
             return streaming_parser.parse_stream(stream)
 
-        config._original_text = text
+        # Store original text for error reporting (dynamic attribute)
+        setattr(config, "_original_text", text)
         error_reporter = (
             ErrorReporter(text, config.max_error_context)
             if config.include_position
@@ -554,7 +561,9 @@ def _parse_internal(text: Union[str, TextIO], config: ParseConfig) -> Any:
 
                     # Use more aggressive config for fallback
                     fallback_config = PreprocessingConfig.aggressive()
-                    fallback_text = JSONPreprocessor.preprocess(text, fallback_config)
+                    fallback_text = JSONPreprocessor.preprocess(
+                        text, True, fallback_config
+                    )
 
                     # Try parsing the fallback text
                     lexer = Lexer(fallback_text)
@@ -653,16 +662,16 @@ def dump(
     obj: Any,
     fp: TextIO,
     *,
-    skipkeys=False,
-    ensure_ascii=True,
-    check_circular=True,
-    allow_nan=True,
-    cls=None,
-    indent=None,
-    separators=None,
-    default=None,
-    sort_keys=False,
-    **kw,
+    skipkeys: bool = False,
+    ensure_ascii: bool = True,
+    check_circular: bool = True,
+    allow_nan: bool = True,
+    cls: Optional[Any] = None,
+    indent: Optional[Union[int, str]] = None,
+    separators: Optional[tuple] = None,
+    default: Optional[Callable[[Any], Any]] = None,
+    sort_keys: bool = False,
+    **kw: Any,
 ) -> None:
     """
     Serialize obj as a JSON formatted stream to fp (drop-in replacement for json.dump).
@@ -689,16 +698,16 @@ def dump(
 def dumps(
     obj: Any,
     *,
-    skipkeys=False,
-    ensure_ascii=True,
-    check_circular=True,
-    allow_nan=True,
-    cls=None,
-    indent=None,
-    separators=None,
-    default=None,
-    sort_keys=False,
-    **kw,
+    skipkeys: bool = False,
+    ensure_ascii: bool = True,
+    check_circular: bool = True,
+    allow_nan: bool = True,
+    cls: Optional[Any] = None,
+    indent: Optional[Union[int, str]] = None,
+    separators: Optional[tuple] = None,
+    default: Optional[Callable[[Any], Any]] = None,
+    sort_keys: bool = False,
+    **kw: Any,
 ) -> str:
     """
     Serialize obj to a JSON formatted str (drop-in replacement for json.dumps).
@@ -732,24 +741,26 @@ class JSONDecoder(json.JSONDecoder):
     def __init__(
         self,
         *,
-        object_hook=None,
-        parse_float=None,
-        parse_int=None,
-        parse_constant=None,
-        strict=True,
-        object_pairs_hook=None,
-    ):
-        # Don't call super().__init__ to avoid setting up standard decoder
-        self.object_hook = object_hook
-        self.parse_float = parse_float
-        self.parse_int = parse_int
-        self.parse_constant = parse_constant
-        self.strict = strict
-        self.object_pairs_hook = object_pairs_hook
+        object_hook: Optional[Callable[[Dict[str, Any]], Any]] = None,
+        parse_float: Optional[Callable[[str], Any]] = None,
+        parse_int: Optional[Callable[[str], Any]] = None,
+        parse_constant: Optional[Callable[[str], Any]] = None,
+        strict: bool = True,
+        object_pairs_hook: Optional[Callable[[List[tuple]], Any]] = None,
+    ) -> None:
+        # Call super().__init__ with proper defaults to ensure compatibility
+        super().__init__(
+            object_hook=object_hook,
+            parse_float=parse_float,
+            parse_int=parse_int,
+            parse_constant=parse_constant,
+            strict=strict,
+            object_pairs_hook=object_pairs_hook,
+        )
         # Store original scan_once for compatibility
         self.scan_once = self._scan_once
 
-    def decode(self, s, _w=None):
+    def decode(self, s: str, _w: Optional[Any] = None) -> Any:
         """Decode a JSON string using jsonshiatsu."""
         return loads(
             s,
@@ -761,7 +772,7 @@ class JSONDecoder(json.JSONDecoder):
             strict=self.strict,
         )
 
-    def raw_decode(self, s, idx=0):
+    def raw_decode(self, s: str, idx: int = 0) -> tuple:
         """Decode a JSON string starting at idx."""
         try:
             result = self.decode(s[idx:])
@@ -776,7 +787,7 @@ class JSONDecoder(json.JSONDecoder):
         except json.JSONDecodeError:
             raise
 
-    def _scan_once(self, s, idx):
+    def _scan_once(self, s: str, idx: int) -> tuple:
         """Internal method for compatibility."""
         return self.raw_decode(s, idx)
 

@@ -290,7 +290,7 @@ class TestLoadFunction(unittest.TestCase):
 
         try:
             # Test that truly invalid content may fail
-            result = jsonshiatsu.load(json_file)
+            jsonshiatsu.load(json_file)
             # If it somehow succeeds, that's also acceptable
             pass
         except (ParseError, json.JSONDecodeError, ValueError):

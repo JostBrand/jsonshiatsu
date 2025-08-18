@@ -10,7 +10,7 @@ Key optimizations:
 
 import re
 from functools import lru_cache
-from typing import Tuple
+from typing import Any, Optional, Tuple
 
 
 class OptimizedJSONPreprocessor:
@@ -356,7 +356,9 @@ class OptimizedJSONPreprocessor:
         return text
 
     @classmethod
-    def preprocess(cls, text: str, aggressive: bool = False, config=None) -> str:
+    def preprocess(
+        cls, text: str, aggressive: bool = False, config: Optional[Any] = None
+    ) -> str:
         """Optimized preprocessing with pattern detection and granular control."""
         if not text or not text.strip():
             return text

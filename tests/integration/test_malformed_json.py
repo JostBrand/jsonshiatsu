@@ -199,7 +199,6 @@ class TestMalformedJSONPatterns(unittest.TestCase):
     def test_malformed_strings(self):
         """Test handling of strings with escaping issues."""
         # Unescaped quotes in strings (basic case)
-        unescaped_quotes = '{"message": "He said "hello" to me"}'
         # This should be handled by the existing parser's string handling
 
         # File paths with single backslashes (will be fixed by aggressive preprocessing)

@@ -82,7 +82,9 @@ class StreamingParser:
 
     def __init__(self, config: ParseConfig):
         self.config = config
-        self.validator = LimitValidator(config.limits)
+        from ..utils.config import ParseLimits
+
+        self.validator = LimitValidator(config.limits or ParseLimits())
 
     def parse_stream(self, stream: TextIO) -> Any:
         """Parse JSON from a stream."""
@@ -120,7 +122,7 @@ class StreamingParser:
         )
 
         # Parse using regular parser (import here to avoid circular imports)
-        from . import parse
+        from ..core.engine import parse
 
         return parse(
             preprocessed,
@@ -289,7 +291,7 @@ class StreamingTokenParser:
             self.pos += 1
         return token
 
-    def skip_whitespace_and_newlines(self):
+    def skip_whitespace_and_newlines(self) -> None:
         """Skip whitespace and newline tokens."""
         while (
             self.current_token().type in [TokenType.WHITESPACE, TokenType.NEWLINE]
@@ -307,7 +309,7 @@ class StreamingTokenParser:
         self.skip_whitespace_and_newlines()
         token = self.current_token()
 
-        self.validator.increment_total_items(f"line {token.position.line}")
+        self.validator.count_item()
 
         if token.type == TokenType.STRING:
             self.advance()
@@ -348,11 +350,11 @@ class StreamingTokenParser:
         if self.current_token().type != TokenType.LBRACE:
             self._raise_parse_error("Expected '{'", self.current_token().position)
 
-        self.validator.enter_structure(f"line {self.current_token().position.line}")
+        self.validator.enter_structure()
         self.advance()
         self.skip_whitespace_and_newlines()
 
-        obj = {}
+        obj: dict = {}
         key_count = 0
 
         if self.current_token().type == TokenType.RBRACE:
@@ -369,9 +371,7 @@ class StreamingTokenParser:
                 self.advance()
                 key_count += 1
 
-                self.validator.validate_object_size(
-                    key_count, f"line {key_token.position.line}"
-                )
+                self.validator.validate_object_keys(key_count)
             else:
                 self._raise_parse_error("Expected object key", key_token.position)
 
@@ -428,11 +428,11 @@ class StreamingTokenParser:
         if self.current_token().type != TokenType.LBRACKET:
             self._raise_parse_error("Expected '['", self.current_token().position)
 
-        self.validator.enter_structure(f"line {self.current_token().position.line}")
+        self.validator.enter_structure()
         self.advance()
         self.skip_whitespace_and_newlines()
 
-        arr = []
+        arr: list = []
 
         if self.current_token().type == TokenType.RBRACKET:
             self.advance()
@@ -445,9 +445,7 @@ class StreamingTokenParser:
             value = self.parse_value()
             arr.append(value)
 
-            self.validator.validate_array_size(
-                len(arr), f"line {self.current_token().position.line}"
-            )
+            self.validator.validate_array_items(len(arr))
 
             self.skip_whitespace_and_newlines()
 
@@ -474,7 +472,7 @@ class StreamingTokenParser:
 
         return arr
 
-    def _raise_parse_error(self, message: str, position: Position):
+    def _raise_parse_error(self, message: str, position: Position) -> None:
         """Raise a parse error with enhanced reporting if available."""
         if self.error_reporter:
             raise self.error_reporter.create_parse_error(message, position)

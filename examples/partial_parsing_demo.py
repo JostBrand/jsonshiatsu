@@ -5,6 +5,8 @@ This demo shows how jsonshiatsu can extract valid data from malformed JSON
 instead of failing completely on the first error.
 """
 
+from typing import Any
+
 from jsonshiatsu import (
     RecoveryAction,
     RecoveryLevel,
@@ -14,27 +16,27 @@ from jsonshiatsu import (
 )
 
 
-def print_result(title, result):
+def print_result(title: str, result: Any) -> None:
     """Helper function to print parsing results nicely."""
     print(f"\n{title}")
     print("=" * len(title))
 
     print(f"✅ Extracted Data: {result.data}")
-    print(f"📊 Success Rate: {result.success_rate:.1f}%")
+    print(f"📊 Success Rate: {result.success_rate: .1f}%")
     print(f"🔧 Recovery Actions: {len(result.recovery_actions)}")
 
     if result.warnings:
-        print(f"⚠️  Warnings ({len(result.warnings)}):")
+        print(f"⚠️  Warnings ({len(result.warnings)}): ")
         for warning in result.warnings:
             print(f"   • {warning.message} (recovered)")
 
     if result.errors:
-        print(f"❌ Errors ({len(result.errors)}):")
+        print(f"❌ Errors ({len(result.errors)}): ")
         for error in result.errors:
             print(f"   • {error.message} at line {error.line}")
 
 
-def demo_basic_field_recovery():
+def demo_basic_field_recovery() -> None:
     """Demonstrate basic field-level error recovery."""
     print("🚀 jsonshiatsu Partial Error Parsing Demo")
     print("=" * 40)
@@ -65,7 +67,7 @@ def demo_basic_field_recovery():
     print("   ❌ Skipped: email (syntax error), settings (malformed object)")
 
 
-def demo_array_recovery():
+def demo_array_recovery() -> None:
     """Demonstrate array element recovery."""
     malformed_array = """
     [
@@ -90,7 +92,7 @@ def demo_array_recovery():
     print("   ❌ Skipped malformed elements without losing valid data")
 
 
-def demo_best_effort_recovery():
+def demo_best_effort_recovery() -> None:
     """Demonstrate best-effort recovery with auto-repair."""
     auto_repairable = """
     {
@@ -118,7 +120,7 @@ def demo_best_effort_recovery():
             print("   • Removed trailing comma")
 
 
-def demo_nested_recovery():
+def demo_nested_recovery() -> None:
     """Demonstrate recovery in nested structures."""
     nested_malformed = """
     {
@@ -164,10 +166,12 @@ def demo_nested_recovery():
             print(f"   • Departments: {len(company['departments'])}")
             for dept in company["departments"]:
                 if "employees" in dept:
-                    print(f"     - {dept['name']}: {len(dept['employees'])} employees")
+                    dept_name = dept["name"]
+                    emp_count = len(dept["employees"])
+                    print("   - {} has {} employees".format(dept_name, emp_count))
 
 
-def demo_real_world_scenarios():
+def demo_real_world_scenarios() -> None:
     """Demonstrate real-world use cases."""
     print("\n\nReal-World Scenarios")
     print("=" * 20)
@@ -175,9 +179,9 @@ def demo_real_world_scenarios():
     # Scenario 1: Log file processing
     print("\n📄 Scenario 1: Log File Processing")
     log_entries = """
-    {"timestamp": "2023-12-01T10:00:00", "level": "info", "message": "Service started"}
-    {"timestamp": "2023-12-01T10:01:00", "level": "error", message: "Missing quotes in log entry"}
-    {"timestamp": "2023-12-01T10:02:00", "level": "info", "message": "Processing request"}
+    {"timestamp": "2023-12-01T10:00:00", "level": "info", "message": "Started"}
+    {"timestamp": "2023-12-01T10:01:00", "level": "error", message: "Missing quotes"}
+    {"timestamp": "2023-12-01T10:02:00", "level": "info", "message": "Request"}
     """
 
     print("Processing JSON log entries...")
@@ -218,7 +222,7 @@ def demo_real_world_scenarios():
     """
 
     result = parse_partial(api_response, RecoveryLevel.BEST_EFFORT)
-    print(f"✅ API response processed with {result.success_rate:.1f}% success rate")
+    print(f"✅ API response processed with {result.success_rate: .1f}% success rate")
 
     if result.data and "data" in result.data and "users" in result.data["data"]:
         users = result.data["data"]["users"]
@@ -247,7 +251,7 @@ def demo_real_world_scenarios():
     """
 
     result = parse_partial(config_with_errors, RecoveryLevel.BEST_EFFORT)
-    print(f"✅ Config processed with {result.success_rate:.1f}% success rate")
+    print(f"✅ Config processed with {result.success_rate: .1f}% success rate")
 
     if result.data:
         available_sections = list(result.data.keys())
@@ -255,7 +259,7 @@ def demo_real_world_scenarios():
         print("   Application can start with partial configuration")
 
 
-def demo_convenience_functions():
+def demo_convenience_functions() -> None:
     """Demonstrate convenience functions."""
     print("\n\nConvenience Functions")
     print("=" * 20)
@@ -276,13 +280,13 @@ def demo_convenience_functions():
     # Full control
     print("\n🎛️ Full Control:")
     result = parse_partial(malformed, RecoveryLevel.BEST_EFFORT)
-    print(f"Success rate: {result.success_rate:.1f}%")
+    print(f"Success rate: {result.success_rate: .1f}%")
     print(f"Recovery actions: {len(result.recovery_actions)}")
     print(f"Warnings: {len(result.warnings)}")
     print(f"Errors: {len(result.errors)}")
 
 
-def demo_recovery_levels():
+def demo_recovery_levels() -> None:
     """Demonstrate different recovery levels."""
     print("\n\nRecovery Levels Comparison")
     print("=" * 30)
@@ -297,17 +301,17 @@ def demo_recovery_levels():
     ]
 
     for level, description in levels:
-        print(f"\n{description}:")
+        print(f"\n{description}: ")
         try:
             result = parse_partial(test_json, level)
             print(f"   Data: {result.data}")
-            print(f"   Success rate: {result.success_rate:.1f}%")
+            print(f"   Success rate: {result.success_rate: .1f}%")
             print(f"   Errors: {len(result.errors)}, Warnings: {len(result.warnings)}")
         except Exception as e:
             print(f"   Failed: {str(e)}")
 
 
-def main():
+def main() -> None:
     """Run all demonstrations."""
     demo_basic_field_recovery()
     demo_array_recovery()

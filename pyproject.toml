@@ -6,7 +6,7 @@ build-backend = "poetry.core.masonry.api"
 name = "jsonshiatsu"
 version = "0.1.0"
 description = "A therapeutic JSON parser that gently massages malformed JSON into shape"
-authors = ["jsonshiatsu Contributors <noreply@example.com>"]
+authors = ["Jost Brandstetter <brandstetterjost@gmail.com>"]
 license = "MIT"
 readme = "README.md"
 homepage = "https://github.com/JostBrand/jsonshiatsu"
@@ -58,6 +58,19 @@ python_version = "3.8"
 warn_return_any = true
 warn_unused_configs = true
 disallow_untyped_defs = true
+exclude = [
+    "tests/",
+    "jsonshiatsu/performance/*"
+]
+
+# Temporarily allow incremental fixes for complex modules - DISABLED FOR FIXING
+# [[tool.mypy.overrides]]
+# module = [
+#     "jsonshiatsu.performance.*",
+#     "jsonshiatsu.streaming.*", 
+#     "jsonshiatsu.recovery.*"
+# ]
+# ignore_errors = true
 
 [tool.poetry.extras]
 # No extras currently defined

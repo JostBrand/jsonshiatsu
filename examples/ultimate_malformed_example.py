@@ -126,7 +126,7 @@ ULTIMATE_MALFORMED_JSON = """Here's some explanatory text before the JSON...
 you see this a completely  malformed JSON example that demonstrates all the features"""
 
 
-def demonstrate_parsing():
+def demonstrate_parsing() -> None:
     """Demonstrate parsing of all examples"""
     print("🌟 ULTIMATE JSONSHIATSU SHOWCASE")
     print("=" * 80)

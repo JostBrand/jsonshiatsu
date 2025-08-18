@@ -5,6 +5,7 @@ These tests ensure jsonshiatsu correctly handles overflow, underflow,
 special values, and extreme precision cases.
 """
 
+import json
 import math
 import sys
 import unittest
@@ -330,14 +331,16 @@ class TestNumberCompatibility(unittest.TestCase):
     def test_python_float_info_compatibility(self):
         """Test compatibility with Python's float info."""
         # Test that we can handle Python's float boundaries
-        float_info_json = f"""{{
-            "max": {sys.float_info.max},
-            "min": {sys.float_info.min},
-            "epsilon": {sys.float_info.epsilon},
-            "min_exp": {sys.float_info.min_exp},
-            "max_exp": {sys.float_info.max_exp},
-            "radix": {sys.float_info.radix}
-        }}"""
+        float_info_json = json.dumps(
+            {
+                "max": sys.float_info.max,
+                "min": sys.float_info.min,
+                "epsilon": sys.float_info.epsilon,
+                "min_exp": sys.float_info.min_exp,
+                "max_exp": sys.float_info.max_exp,
+                "radix": sys.float_info.radix,
+            }
+        )
 
         result = jsonshiatsu.loads(float_info_json)
 

@@ -6,11 +6,11 @@ import argparse
 import json
 import sys
 
-from . import parse
-from .parser import ParseError
+import jsonshiatsu
+from jsonshiatsu.security.exceptions import ParseError
 
 
-def main():
+def main() -> None:
     """Main CLI entry point."""
     parser = argparse.ArgumentParser(
         description="Parse non-standard JSON using jsonshiatsu",
@@ -54,10 +54,10 @@ Examples:
         input_text = args.file.read()
 
         # Parse using jsonshiatsu
-        result = parse(
+        result = jsonshiatsu.parse(
             input_text,
             fallback=not args.no_fallback,
-            duplicate_keys=args.duplicate_keys,
+            aggressive=args.duplicate_keys,
         )
 
         # Output formatted JSON

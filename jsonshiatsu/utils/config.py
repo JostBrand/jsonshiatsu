@@ -26,7 +26,7 @@ class ParseLimits:
     # Processing limits
     max_preprocessing_iterations: int = 10  # Max preprocessing passes
 
-    def __post_init__(self):
+    def __post_init__(self) -> None:
         """Validate limits after initialization."""
         if self.max_input_size <= 0:
             raise ValueError("max_input_size must be positive")

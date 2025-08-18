@@ -10,7 +10,7 @@ import jsonshiatsu
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
 
-def main():
+def main() -> None:
     print("jsonshiatsu - Malformed JSON Handling Demo")
     print("=" * 50)
 

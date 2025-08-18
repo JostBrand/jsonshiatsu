@@ -6,7 +6,7 @@ import jsonshiatsu
 from jsonshiatsu import ParseConfig, ParseLimits, SecurityError
 
 
-def main():
+def main() -> None:
     print("jsonshiatsu - Security Features Demo")
     print("=" * 40)
 

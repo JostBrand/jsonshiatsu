@@ -363,7 +363,7 @@ class TestPreprocessingPipeline(unittest.TestCase):
         self.assertEqual(result, '{"only": "one"}')
 
 
-class TestPreprocessingPipeline(unittest.TestCase):
+class TestFullPreprocessingPipeline(unittest.TestCase):
     """Test the complete preprocessing pipeline."""
 
     def test_full_preprocessing_pipeline(self):

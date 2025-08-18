@@ -76,7 +76,7 @@ class PartialParseResult:
     total_fields: int = 0  # Total fields/elements encountered
     successful_fields: int = 0  # Successfully parsed fields/elements
 
-    def add_error(self, error: PartialParseError):
+    def add_error(self, error: PartialParseError) -> None:
         """Add an error to the appropriate collection."""
         if error.severity == ErrorSeverity.ERROR:
             self.errors.append(error)
@@ -86,12 +86,13 @@ class PartialParseResult:
         if error.recovery_action:
             self.recovery_actions.append(error.recovery_action)
 
-    def calculate_success_rate(self):
+    def calculate_success_rate(self) -> float:
         """Calculate the success rate based on processed fields."""
         if self.total_fields == 0:
             self.success_rate = 0.0
         else:
             self.success_rate = (self.successful_fields / self.total_fields) * 100.0
+        return self.success_rate
 
 
 class PartialParser:
@@ -110,14 +111,14 @@ class PartialParser:
         self.recovery_level = recovery_level
         self.validator = LimitValidator(config.limits) if config.limits else None
 
-        self.current_path = []
+        self.current_path: list = []
         self.result = PartialParseResult()
-        self.error_reporter = None
+        self.error_reporter: Optional[ErrorReporter] = None
 
         self.in_recovery_mode = False
         self.recovery_depth = 0
 
-    def set_error_reporter(self, error_reporter: ErrorReporter):
+    def set_error_reporter(self, error_reporter: ErrorReporter) -> None:
         """Set error reporter for enhanced error information."""
         self.error_reporter = error_reporter
 
@@ -141,7 +142,7 @@ class PartialParser:
             return None
         return self.tokens[pos]
 
-    def skip_whitespace_and_newlines(self):
+    def skip_whitespace_and_newlines(self) -> None:
         """Skip whitespace and newline tokens."""
         while self.pos < self.tokens_length and self.tokens[self.pos].type in [
             TokenType.WHITESPACE,
@@ -223,7 +224,8 @@ class PartialParser:
         ]:
             return False, None
 
-        if self.current_token() and self.current_token().type == TokenType.COMMA:
+        current_token = self.current_token()
+        if current_token and current_token.type == TokenType.COMMA:
             self.advance()
             error.recovery_attempted = True
             error.recovery_action = RecoveryAction.REMOVED_COMMA
@@ -270,6 +272,7 @@ class PartialParser:
             return False, None
 
         value = token.value.lower()
+        recovered: Any
         if value in ["true", "false"]:
             recovered = value == "true"
         elif value in ["null", "none", "undefined"]:
@@ -286,7 +289,7 @@ class PartialParser:
 
         return True, recovered
 
-    def skip_to_recovery_point(self):
+    def skip_to_recovery_point(self) -> None:
         """Skip tokens until we find a reasonable recovery point."""
         recovery_tokens = [
             TokenType.COMMA,
@@ -395,7 +398,8 @@ class PartialParser:
         """Parse an object with error recovery."""
         self.skip_whitespace_and_newlines()
 
-        if not self.current_token() or self.current_token().type != TokenType.LBRACE:
+        current_token = self.current_token()
+        if not current_token or current_token.type != TokenType.LBRACE:
             error = self.create_error("Expected '{'", "syntax_error")
             self.result.add_error(error)
             return {}, False
@@ -406,17 +410,21 @@ class PartialParser:
         self.advance()
         self.skip_whitespace_and_newlines()
 
-        obj = {}
+        obj: Dict[str, Any] = {}
         obj_success = True
 
-        if self.current_token() and self.current_token().type == TokenType.RBRACE:
+        current_token = self.current_token()
+        if current_token and current_token.type == TokenType.RBRACE:
             self.advance()
             if self.validator:
                 self.validator.exit_structure()
             self.result.successful_fields += 1
             return obj, True
 
-        while self.current_token() and self.current_token().type != TokenType.RBRACE:
+        while True:
+            current_token = self.current_token()
+            if not current_token or current_token.type == TokenType.RBRACE:
+                break
             (
                 key_success,
                 key,
@@ -443,10 +451,8 @@ class PartialParser:
                 self.advance()
                 self.skip_whitespace_and_newlines()
 
-                if (
-                    self.current_token()
-                    and self.current_token().type == TokenType.RBRACE
-                ):
+                current_token = self.current_token()
+                if current_token and current_token.type == TokenType.RBRACE:
                     if self.recovery_level in [
                         RecoveryLevel.BEST_EFFORT,
                         RecoveryLevel.EXTRACT_ALL,
@@ -465,7 +471,8 @@ class PartialParser:
                 break
             else:
                 error = self.create_error(
-                    f"Expected ',' or '}}' but found {current.type}", "syntax_error"
+                    f"Expected ', ' or '}}' but found {current.type}",
+                    "syntax_error",
                 )
                 self.result.add_error(error)
                 obj_success = False
@@ -480,7 +487,8 @@ class PartialParser:
                 else:
                     break
 
-        if self.current_token() and self.current_token().type == TokenType.RBRACE:
+        current_token = self.current_token()
+        if current_token and current_token.type == TokenType.RBRACE:
             self.advance()
             if self.validator:
                 self.validator.exit_structure()
@@ -593,7 +601,8 @@ class PartialParser:
         """Parse an array with error recovery."""
         self.skip_whitespace_and_newlines()
 
-        if not self.current_token() or self.current_token().type != TokenType.LBRACKET:
+        current_token = self.current_token()
+        if not current_token or current_token.type != TokenType.LBRACKET:
             error = self.create_error("Expected '['", "syntax_error")
             self.result.add_error(error)
             return [], False
@@ -604,18 +613,22 @@ class PartialParser:
         self.advance()
         self.skip_whitespace_and_newlines()
 
-        arr = []
+        arr: List[Any] = []
         arr_success = True
         element_index = 0
 
-        if self.current_token() and self.current_token().type == TokenType.RBRACKET:
+        current_token = self.current_token()
+        if current_token and current_token.type == TokenType.RBRACKET:
             self.advance()
             if self.validator:
                 self.validator.exit_structure()
             self.result.successful_fields += 1
             return arr, True
 
-        while self.current_token() and self.current_token().type != TokenType.RBRACKET:
+        while True:
+            current_token = self.current_token()
+            if not current_token or current_token.type == TokenType.RBRACKET:
+                break
             self.current_path.append(f"[{element_index}]")
 
             # Parse array element
@@ -645,10 +658,8 @@ class PartialParser:
                 self.advance()
                 self.skip_whitespace_and_newlines()
 
-                if (
-                    self.current_token()
-                    and self.current_token().type == TokenType.RBRACKET
-                ):
+                current_token = self.current_token()
+                if current_token and current_token.type == TokenType.RBRACKET:
                     if self.recovery_level in [
                         RecoveryLevel.BEST_EFFORT,
                         RecoveryLevel.EXTRACT_ALL,
@@ -667,7 +678,8 @@ class PartialParser:
                 break
             else:
                 error = self.create_error(
-                    f"Expected ',' or ']' but found {current.type}", "syntax_error"
+                    f"Expected ', ' or ']' but found {current.type}",
+                    "syntax_error",
                 )
                 self.result.add_error(error)
                 arr_success = False
@@ -683,7 +695,8 @@ class PartialParser:
                     break
 
         # Close array
-        if self.current_token() and self.current_token().type == TokenType.RBRACKET:
+        current_token = self.current_token()
+        if current_token and current_token.type == TokenType.RBRACKET:
             self.advance()
             if self.validator:
                 self.validator.exit_structure()

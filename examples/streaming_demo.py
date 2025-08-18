@@ -11,7 +11,7 @@ import jsonshiatsu
 from jsonshiatsu import ParseConfig
 
 
-def main():
+def main() -> None:
     print("jsonshiatsu - Streaming Features Demo")
     print("=" * 40)
 
@@ -28,7 +28,8 @@ def main():
     # Create data larger than default streaming threshold
     large_data = {"items": list(range(100000))}  # Large list
     json_string = json.dumps(large_data)
-    print(f"  JSON size: {len(json_string):,} characters")
+    json_size = len(json_string)
+    print("  JSON size: {:,} characters".format(json_size))
 
     # This will automatically use streaming
     config = ParseConfig(streaming_threshold=50000)  # 50KB threshold
@@ -178,8 +179,8 @@ def main():
     result2 = jsonshiatsu.parse(stream)
     streaming_time = time.time() - start
 
-    print(f"  Regular parsing time: {regular_time:.4f}s")
-    print(f"  Streaming parsing time: {streaming_time:.4f}s")
+    print(f"  Regular parsing time: {regular_time: .4f}s")
+    print(f"  Streaming parsing time: {streaming_time: .4f}s")
     print(f"  Results identical: {result1 == result2}")
 
     print("\n" + "=" * 40)

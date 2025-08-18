@@ -6,7 +6,7 @@ import jsonshiatsu
 from jsonshiatsu import ParseConfig, ParseError
 
 
-def main():
+def main() -> None:
     print("jsonshiatsu - Enhanced Error Reporting Demo")
     print("=" * 45)
 
@@ -105,7 +105,10 @@ def main():
         include_context=True, max_error_context=10, fallback=False
     )
 
-    error_json = 'This is a very long prefix that contains lots of text before the actual JSON starts {"key": invalid_value} and then some suffix text'
+    error_json = (
+        "This is a very long prefix that contains lots of text before the actual "
+        'JSON starts {"key": invalid_value} and then some suffix text'
+    )
 
     print("\nLarge context (100 chars):")
     try:

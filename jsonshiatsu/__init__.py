@@ -66,11 +66,15 @@ import json as _json
 
 # Import standard json module attributes for compatibility
 try:
-    _json_version = _json.__version__
-    _json_author = _json.__author__
+    _json_version = getattr(_json, "__version__", "2.0.9")
+    _json_author = getattr(_json, "__author__", "Bob Ippolito <bob@redivi.com>")
 except AttributeError:
     _json_version = "2.0.9"
     _json_author = "Bob Ippolito <bob@redivi.com>"
+
+# Add module attributes that mypy expects
+__version__ = "0.1.0"
+__author__ = "Jost Brandstetter <brandstetterjost@gmail.com>"
 __all__ = [
     # Drop-in json replacement functions and classes
     "loads",

@@ -6,6 +6,7 @@ various malformed formats commonly found in real-world data.
 """
 
 import re
+from typing import Any, Match, Optional
 
 
 class JSONPreprocessor:
@@ -201,7 +202,8 @@ class JSONPreprocessor:
         - ObjectId("507f1f77bcf86cd799439011") → "507f1f77bcf86cd799439011"
         - ISODate("2023-01-01T00:00:00Z") → "2023-01-01T00:00:00Z"
         - RegExp("pattern", "flags") → "/pattern/flags"
-        - UUID("123e4567-e89b-12d3-a456-426614174000") → "123e4567-e89b-12d3-a456-426614174000"
+        - UUID("123e4567-e89b-12d3-a456-426614174000") →
+          "123e4567-e89b-12d3-a456-426614174000"
         """
         # Common MongoDB/JavaScript function patterns
         patterns = [
@@ -248,7 +250,7 @@ class JSONPreprocessor:
         Only quotes values that would be invalid as JSON identifiers.
         """
 
-        def quote_value(match):
+        def quote_value(match: Match[str]) -> str:
             colon_space = match.group(1)
             value = match.group(2)
             after = match.group(3) if len(match.groups()) >= 3 else ""
@@ -305,7 +307,7 @@ class JSONPreprocessor:
         Only quotes keys that are valid identifiers but not already quoted.
         """
 
-        def quote_key(match):
+        def quote_key(match: Match[str]) -> str:
             before_context = match.group(1)
             key = match.group(2)
             colon_space = match.group(3)
@@ -397,7 +399,7 @@ class JSONPreprocessor:
         but users typically want literal \f in file paths.
         """
 
-        def fix_file_paths(match):
+        def fix_file_paths(match: Match[str]) -> str:
             full_match = match.group(0)
             content = match.group(1)
 
@@ -432,7 +434,8 @@ class JSONPreprocessor:
             ]
 
             content_lower = content.lower()
-            # If the string contains valid JSON escape sequences (Unicode or standard escapes),
+            # If the string contains valid JSON escape sequences (Unicode or
+            # standard escapes),
             # be very conservative about treating it as a file path
             has_json_escapes = re.search(r'\\[\\"/bfnrtu]|\\u[0-9a-fA-F]{4}', content)
 
@@ -499,7 +502,7 @@ class JSONPreprocessor:
         Handles cases like: "Hello "world"" -> "Hello \"world\""
         """
 
-        def fix_quotes(match):
+        def fix_quotes(match: Match[str]) -> str:
             content = match.group(1)
 
             # If no internal quotes, return as-is
@@ -542,7 +545,6 @@ class JSONPreprocessor:
 
         # Simple approach: find strings that contain unescaped internal quotes
         # Pattern: "text"word"text" where the middle quotes aren't escaped
-        pattern = r'"([^"\\]*(?:\\.[^"\\]*)*)"'
 
         # We need a more sophisticated approach for strings with unescaped quotes
         # Let's use a different strategy - find problem patterns specifically
@@ -624,7 +626,8 @@ class JSONPreprocessor:
     @staticmethod
     def handle_incomplete_json(text: str) -> str:
         """
-        Attempt to complete incomplete JSON structures by adding missing closing braces/brackets.
+        Attempt to complete incomplete JSON structures by adding missing closing
+        braces/brackets.
 
         This is a best-effort approach for handling truncated JSON.
         """
@@ -751,7 +754,7 @@ class JSONPreprocessor:
         # Normalize spaces around JSON punctuation
         # Add space after comma if missing, but only in JSON structural context
         # Properly handle quoted strings
-        def normalize_commas_outside_strings(text):
+        def normalize_commas_outside_strings(text: str) -> str:
             result = []
             i = 0
             in_string = False
@@ -798,7 +801,7 @@ class JSONPreprocessor:
         text = re.sub(r'"\s*:\s*(?![0-9])', '": ', text)
 
         # Handle unquoted keys with quote-aware processing
-        def normalize_colons_outside_strings(text):
+        def normalize_colons_outside_strings(text: str) -> str:
             result = []
             i = 0
             in_string = False
@@ -853,15 +856,17 @@ class JSONPreprocessor:
 
         Converts:
         - [1,, 3] -> [1, null, 3]  (valid - arrays can have sparse elements)
-        - {key1: val1,, key2: val2} -> {key1: val1, key2: val2}  (remove invalid syntax)
+        - {key1: val1,, key2: val2} -> {key1: val1, key2: val2}  (remove
+          invalid syntax)
 
-        Note: Only arrays support sparse elements. Objects with double commas are invalid.
+        Note: Only arrays support sparse elements. Objects with double commas
+        are invalid.
         """
         import re
 
         # FIRST: Clean up invalid object sparse syntax BEFORE processing arrays
         # This prevents ,, in objects from being converted to null
-        def clean_object_double_commas(text):
+        def clean_object_double_commas(text: str) -> str:
             """Remove double commas from object contexts only (invalid JSON)."""
             # Be very careful to only clean object contexts, not array contexts
             lines = text.split("\n")
@@ -882,7 +887,7 @@ class JSONPreprocessor:
         text = clean_object_double_commas(text)
 
         # SECOND: Process arrays to convert sparse elements to null
-        def fix_sparse_in_array(match):
+        def fix_sparse_in_array(match: Match[str]) -> str:
             """Fix sparse elements within an array."""
             content = match.group(1)
 
@@ -900,7 +905,8 @@ class JSONPreprocessor:
             while ",," in fixed_content:
                 fixed_content = fixed_content.replace(",,", ", null,")
 
-            # Handle trailing comma: convert to null for jsonshiatsu's permissive behavior
+            # Handle trailing comma: convert to null for jsonshiatsu's permissive
+            # behavior
             # But don't add null if content already ends with null (from consecutive
             # comma handling)
             stripped = fixed_content.rstrip()
@@ -922,7 +928,9 @@ class JSONPreprocessor:
         return text
 
     @classmethod
-    def preprocess(cls, text: str, aggressive: bool = False, config=None) -> str:
+    def preprocess(
+        cls, text: str, aggressive: bool = False, config: Optional[Any] = None
+    ) -> str:
         """
         Apply preprocessing steps to clean malformed JSON.
 

@@ -5,7 +5,7 @@ jsonshiatsu demonstration script.
 import jsonshiatsu
 
 
-def main():
+def main() -> None:
     print("jsonshiatsu - Permissive JSON Parser Demo")
     print("=" * 40)
 

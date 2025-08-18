@@ -39,7 +39,7 @@ class Token(NamedTuple):
 
 
 class Lexer:
-    def __init__(self, text: str):
+    def __init__(self, text: str) -> None:
         self.text = text
         self.pos = 0
         self.line = 1
@@ -69,7 +69,7 @@ class Lexer:
 
         return char
 
-    def skip_whitespace(self):
+    def skip_whitespace(self) -> None:
         while self.pos < len(self.text) and self.text[self.pos] in " \t\r":
             self.advance()
 
@@ -172,7 +172,8 @@ class Lexer:
         return result
 
     def _read_unicode_escape(self) -> Optional[str]:
-        """Read a Unicode escape sequence like u0041 or surrogate pairs like uD83DuDE00."""
+        """Read a Unicode escape sequence like u0041 or surrogate pairs like
+        uD83DuDE00."""
         if self.peek() != "u":
             return None
 
