@@ -14,7 +14,7 @@ import jsonshiatsu
 class TestUnicodeEscapeSequences(unittest.TestCase):
     """Test Unicode escape sequence handling."""
 
-    def test_basic_unicode_escapes(self):
+    def test_basic_unicode_escapes(self) -> None:
         """Test basic Unicode escape sequences."""
         # Simple ASCII character
         result = jsonshiatsu.loads('{"test": "\\u0041"}')
@@ -28,7 +28,7 @@ class TestUnicodeEscapeSequences(unittest.TestCase):
         result = jsonshiatsu.loads('{"\\u0041": "value"}')
         self.assertEqual(result, {"A": "value"})
 
-    def test_non_ascii_unicode_escapes(self):
+    def test_non_ascii_unicode_escapes(self) -> None:
         """Test non-ASCII Unicode characters."""
         # Chinese characters
         result = jsonshiatsu.loads('{"chinese": "\\u4F60\\u597D"}')
@@ -44,7 +44,7 @@ class TestUnicodeEscapeSequences(unittest.TestCase):
         )
         self.assertEqual(result, {"cyrillic": "Привет"})
 
-    def test_emoji_unicode_escapes(self):
+    def test_emoji_unicode_escapes(self) -> None:
         """Test emoji Unicode escape sequences."""
         # Simple emoji (single code point)
         result = jsonshiatsu.loads('{"smile": "\\u263A"}')
@@ -62,7 +62,7 @@ class TestUnicodeEscapeSequences(unittest.TestCase):
         expected = "😀😁😂"
         self.assertEqual(result, {"emojis": expected})
 
-    def test_mixed_unicode_and_ascii(self):
+    def test_mixed_unicode_and_ascii(self) -> None:
         """Test mixed Unicode escapes and regular ASCII."""
         result = jsonshiatsu.loads('{"mixed": "Hello \\u4F60\\u597D World!"}')
         self.assertEqual(result, {"mixed": "Hello 你好 World!"})
@@ -73,7 +73,7 @@ class TestUnicodeEscapeSequences(unittest.TestCase):
         )
         self.assertEqual(result, {"complex": "Line1\nUnicode: 你好\tTab"})
 
-    def test_invalid_unicode_escapes(self):
+    def test_invalid_unicode_escapes(self) -> None:
         """Test handling of invalid Unicode escape sequences."""
         # Incomplete Unicode escape (should handle gracefully by treating literally)
         result = jsonshiatsu.loads('{"incomplete": "\\u00"}')
@@ -87,7 +87,7 @@ class TestUnicodeEscapeSequences(unittest.TestCase):
         result = jsonshiatsu.loads('{"just_u": "\\u"}')
         self.assertEqual(result, {"just_u": "u"})
 
-    def test_unicode_compatibility_with_standard_json(self):
+    def test_unicode_compatibility_with_standard_json(self) -> None:
         """Test that valid Unicode escapes match standard JSON behavior."""
         test_cases = [
             '{"test": "\\u0041"}',
@@ -112,7 +112,7 @@ class TestUnicodeEscapeSequences(unittest.TestCase):
 class TestUnicodeNormalizationConflicts(unittest.TestCase):
     """Test Unicode normalization conflicts with duplicate-looking keys."""
 
-    def test_nfc_vs_nfd_normalization(self):
+    def test_nfc_vs_nfd_normalization(self) -> None:
         """Test NFC vs NFD Unicode normalization conflicts."""
         # Create two visually identical keys with different Unicode representations
         # NFC: é as single codepoint (U+00E9)
@@ -132,7 +132,7 @@ class TestUnicodeNormalizationConflicts(unittest.TestCase):
         self.assertEqual(result[nfc_key], "nfc")
         self.assertEqual(result[nfd_key], "nfd")
 
-    def test_multiple_normalization_forms(self):
+    def test_multiple_normalization_forms(self) -> None:
         """Test multiple Unicode normalization forms."""
         # Various ways to represent the same visual character
         variations = [
@@ -153,7 +153,7 @@ class TestUnicodeNormalizationConflicts(unittest.TestCase):
             self.assertIn(var, result)
             self.assertEqual(result[var], str(i))
 
-    def test_normalization_with_unicode_escapes(self):
+    def test_normalization_with_unicode_escapes(self) -> None:
         """Test normalization conflicts using Unicode escapes."""
         # Using Unicode escapes to create the same normalization conflict
         # \\u00E9 = é (NFC)
@@ -171,7 +171,7 @@ class TestUnicodeNormalizationConflicts(unittest.TestCase):
 class TestUnicodeEdgeCases(unittest.TestCase):
     """Test Unicode edge cases and boundary conditions."""
 
-    def test_unicode_in_different_contexts(self):
+    def test_unicode_in_different_contexts(self) -> None:
         """Test Unicode in various JSON contexts."""
         # Unicode in object keys
         result = jsonshiatsu.loads('{"\\u4F60\\u597D": "hello"}')
@@ -185,7 +185,7 @@ class TestUnicodeEdgeCases(unittest.TestCase):
         result = jsonshiatsu.loads('{\\u4F60\\u597D: "unquoted"}')
         self.assertEqual(result, {"你好": "unquoted"})
 
-    def test_unicode_boundary_values(self):
+    def test_unicode_boundary_values(self) -> None:
         """Test Unicode boundary values and special ranges."""
         # Null character
         result = jsonshiatsu.loads('{"null_char": "\\u0000"}')
@@ -197,9 +197,9 @@ class TestUnicodeEdgeCases(unittest.TestCase):
 
         # High Unicode values
         result = jsonshiatsu.loads('{"high": "\\uFFFF"}')
-        self.assertEqual(result, {"high": "\uFFFF"})
+        self.assertEqual(result, {"high": "\uffff"})
 
-    def test_unicode_with_other_malformed_patterns(self):
+    def test_unicode_with_other_malformed_patterns(self) -> None:
         """Test Unicode combined with other malformed JSON patterns."""
         # Unicode with comments
         malformed = """{
@@ -218,7 +218,7 @@ class TestUnicodeEdgeCases(unittest.TestCase):
         expected = {"date": "2025-08-01", "chinese": "你好"}
         self.assertEqual(result, expected)
 
-    def test_unicode_preprocessing_fix(self):
+    def test_unicode_preprocessing_fix(self) -> None:
         """Test the specific Unicode preprocessing bug that was fixed."""
         # This was the pattern that caused issues: Unicode escapes being
         # incorrectly identified as file paths by the preprocessing
@@ -249,7 +249,7 @@ class TestUnicodeEdgeCases(unittest.TestCase):
 class TestUnicodeFilePathDistinction(unittest.TestCase):
     """Test that Unicode escapes are distinguished from file paths."""
 
-    def test_unicode_vs_file_paths(self):
+    def test_unicode_vs_file_paths(self) -> None:
         """Test that Unicode escapes and file paths are handled differently."""
         # Pure Unicode sequence (should not be treated as file path)
         unicode_case = '{"unicode": "\\u4F60\\u597D"}'
@@ -267,7 +267,7 @@ class TestUnicodeFilePathDistinction(unittest.TestCase):
         result = jsonshiatsu.loads(mixed_case)
         self.assertIn("mixed", result)
 
-    def test_preprocessing_unicode_detection(self):
+    def test_preprocessing_unicode_detection(self) -> None:
         """Test the preprocessing logic for detecting Unicode vs paths."""
         from jsonshiatsu.core.transformer import JSONPreprocessor
 

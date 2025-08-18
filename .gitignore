@@ -169,3 +169,4 @@ local_settings.py
 # Backup files
 *.bak
 *.backup
+.pre-commit-config.yaml

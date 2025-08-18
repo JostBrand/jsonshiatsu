@@ -130,7 +130,7 @@ class TestEscapeSequenceComprehensive(unittest.TestCase):
         self.assertEqual(result["accents"], "éèêë")
         self.assertEqual(result["mixed"], "Hello 你好 World!")
 
-    def test_invalid_escape_handling(self):
+    def test_invalid_escape_handling(self) -> None:
         """Test handling of invalid escape sequences."""
         # jsonshiatsu should handle invalid escapes gracefully
         invalid_escapes = [
@@ -165,7 +165,7 @@ class TestEscapeSequenceComprehensive(unittest.TestCase):
         self.assertIn("A", result)
         self.assertEqual(result["A"], "Unicode A as key")
 
-    def test_file_path_vs_unicode_escapes(self):
+    def test_file_path_vs_unicode_escapes(self) -> None:
         """Test distinction between file paths and Unicode escapes."""
         mixed_paths = """{
             "unicode": "\\u4F60\\u597D",
@@ -370,7 +370,7 @@ class TestComplexRealWorldScenarios(unittest.TestCase):
 class TestErrorRecoveryComprehensive(unittest.TestCase):
     """Comprehensive error recovery and partial parsing tests."""
 
-    def test_mixed_valid_invalid_fields(self):
+    def test_mixed_valid_invalid_fields(self) -> None:
         """Test objects with mix of valid and invalid fields."""
         mixed_json = """{
             "valid1": "this works",
@@ -396,7 +396,7 @@ class TestErrorRecoveryComprehensive(unittest.TestCase):
             # Acceptable to fail on severely malformed JSON
             pass
 
-    def test_incomplete_structures_recovery(self):
+    def test_incomplete_structures_recovery(self) -> None:
         """Test recovery from incomplete structures."""
         incomplete_cases = [
             # Missing closing brace
@@ -419,7 +419,7 @@ class TestErrorRecoveryComprehensive(unittest.TestCase):
                     # Acceptable to fail
                     pass
 
-    def test_cascading_errors(self):
+    def test_cascading_errors(self) -> None:
         """Test handling of cascading errors."""
         cascading_errors = """{
             "level1": {
@@ -451,7 +451,7 @@ class TestErrorRecoveryComprehensive(unittest.TestCase):
 class TestPerformanceEdgeCases(unittest.TestCase):
     """Test performance characteristics and limits."""
 
-    def test_deeply_nested_structures(self):
+    def test_deeply_nested_structures(self) -> None:
         """Test deeply nested structures within reasonable limits."""
         # Create moderately deep nesting
         depth = 50
@@ -472,7 +472,7 @@ class TestPerformanceEdgeCases(unittest.TestCase):
             # Expected if depth limit is exceeded
             pass
 
-    def test_large_arrays_within_limits(self):
+    def test_large_arrays_within_limits(self) -> None:
         """Test large arrays within security limits."""
         # Create moderately large array
         size = 1000

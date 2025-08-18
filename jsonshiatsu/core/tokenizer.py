@@ -206,11 +206,11 @@ class Lexer:
                 else:
                     # No valid low surrogate found, treat as invalid
                     # Return replacement character instead of invalid surrogate
-                    return "\uFFFD"  # Unicode replacement character
+                    return "\ufffd"  # Unicode replacement character
             elif 0xDC00 <= code_point <= 0xDFFF:
                 # This is a low surrogate without a high surrogate (invalid)
                 # Return replacement character instead of invalid surrogate
-                return "\uFFFD"  # Unicode replacement character
+                return "\ufffd"  # Unicode replacement character
             else:
                 # Regular Unicode character
                 return chr(code_point)

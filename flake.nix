@@ -4,12 +4,23 @@
   inputs = {
     nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
     flake-utils.url = "github:numtide/flake-utils";
+    pre-commit-hooks.url = "github:cachix/git-hooks.nix";
   };
 
-  outputs = { self, nixpkgs, flake-utils }:
+  outputs = { self, nixpkgs, flake-utils, pre-commit-hooks }:
     flake-utils.lib.eachDefaultSystem (system:
       let
         pkgs = nixpkgs.legacyPackages.${system};
+        
+        pre-commit-check = pre-commit-hooks.lib.${system}.run {
+          src = ./.;
+          hooks = {
+            black.enable = true;
+            isort.enable = true;
+            flake8.enable = true;
+            mypy.enable = true;
+          };
+        };
         
         python = pkgs.python313;
         pythonWithPkgs = python.withPackages (ps: with ps; [
@@ -111,13 +122,16 @@
 
       in
       {
+        checks = {
+          inherit pre-commit-check;
+        };
+
         devShells.default = pkgs.mkShell {
           buildInputs = with pkgs; [
             pythonWithPkgs
             
             git
             curl
-            pre-commit
             jq
             ruff
             
@@ -125,9 +139,9 @@
             tree
             valgrind
             devScripts
-          ];
+          ] ++ pre-commit-check.enabledPackages;
 
-          shellHook = ''
+          shellHook = pre-commit-check.shellHook + ''
             echo "🤲 jsonshiatsu Development Environment"
             echo "======================================"
             echo ""
