@@ -145,6 +145,7 @@ class TestLoadsCompatibility(unittest.TestCase):
 
     def test_cls_parameter(self):
         """Test cls parameter compatibility."""
+
         # Custom decoder class
         class CustomDecoder(json.JSONDecoder):
             def decode(self, s):
@@ -229,6 +230,7 @@ class TestLoadCompatibility(unittest.TestCase):
 
     def test_load_with_parameters(self):
         """Test load() with various parameters."""
+
         # Test with object_hook
         def add_marker(obj):
             if isinstance(obj, dict):
