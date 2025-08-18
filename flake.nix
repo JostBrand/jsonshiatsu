@@ -117,6 +117,7 @@
             
             git
             curl
+            pre-commit
             jq
             ruff
             
