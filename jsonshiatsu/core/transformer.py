@@ -501,126 +501,136 @@ class JSONPreprocessor:
 
         Handles cases like: "Hello "world"" -> "Hello \"world\""
         """
-
-        def fix_quotes(match: Match[str]) -> str:
-            content = match.group(1)
-
-            # If no internal quotes, return as-is
-            if '"' not in content:
-                return match.group(0)
-
-            # Simple heuristic: if we have unescaped quotes in the middle,
-            # escape them. We'll be conservative and only fix obvious cases.
-            # Pattern: text"word"text -> text\"word\"text
-
-            # Find unescaped quotes (not preceded by \)
-            result = []
-            i = 0
-            while i < len(content):
-                if content[i] == '"':
-                    # Check if this quote is already escaped
-                    escaped = False
-                    backslash_count = 0
-                    j = i - 1
-                    while j >= 0 and content[j] == "\\":
-                        backslash_count += 1
-                        j -= 1
-
-                    # Even number of backslashes means the quote is not escaped
-                    escaped = backslash_count % 2 == 1
-
-                    if not escaped:
-                        result.append('\\"')
-                    else:
-                        result.append('"')
-                else:
-                    result.append(content[i])
-                i += 1
-
-            return f'"{"".join(result)}"'
-
-        # Apply to double-quoted strings only (be conservative)
-        # Use a pattern that matches the outermost quotes
-        # This is tricky - we need to handle nested quotes properly
-
-        # Simple approach: find strings that contain unescaped internal quotes
-        # Pattern: "text"word"text" where the middle quotes aren't escaped
-
-        # We need a more sophisticated approach for strings with unescaped quotes
-        # Let's use a different strategy - find problem patterns specifically
-
         # Safety check - don't process very large texts to avoid performance issues
-        if len(text) > 10000:
+        if len(text) > 50000:
             return text
 
-        # Use a character-by-character approach but with safeguards
-        result = []
-        i = 0
-        max_iterations = len(text) * 2  # Safety limit
-        iterations = 0
-
-        while i < len(text) and iterations < max_iterations:
-            iterations += 1
-
-            if text[i] == '"':
-                # Found start of a string - process it carefully
-                result.append('"')
-                i += 1
-
-                # Process the string content until we find the real closing quote
-                while i < len(text) and iterations < max_iterations:
-                    iterations += 1
-
-                    if text[i] == '"':
-                        # Found a potential closing quote
-                        # Check if it's escaped
-                        backslash_count = 0
-                        j = len(result) - 1
-                        while j >= 0 and result[j] == "\\":
-                            backslash_count += 1
-                            j -= 1
-
-                        if backslash_count % 2 == 0:
-                            # This quote is not escaped
-                            # Check if this looks like the real end of the string
-                            next_idx = i + 1
-
-                            # For a quote to be the real end, it should be followed by
-                            # JSON syntax characters, not more string content
-                            is_real_end = False
-                            if next_idx >= len(text):
-                                is_real_end = True
-                            elif text[next_idx] in ":,}]":
-                                is_real_end = True
-                            elif text[next_idx] in "\n\r\t ":
-                                # Check if after whitespace we have JSON syntax
-                                k = next_idx
-                                while k < len(text) and text[k] in "\n\r\t ":
-                                    k += 1
-                                if k >= len(text) or text[k] in ":,}]":
-                                    is_real_end = True
-
-                            if is_real_end:
-                                # This is the closing quote
-                                result.append('"')
-                                i += 1
-                                break
+        # Handle specific pattern: "text "word" text" -> "text \"word\" text"
+        # Look for strings that have unescaped quotes in the middle
+        
+        # Pattern: find potential problem strings with internal quotes
+        # This is a more sophisticated approach that looks at JSON structure
+        
+        try:
+            # Use character-by-character parsing with JSON awareness
+            result = []
+            i = 0
+            
+            while i < len(text):
+                if text[i] == '"':
+                    # Start of a string - find its actual end
+                    quote_start = i
+                    result.append('"')
+                    i += 1
+                    
+                    string_content = ""
+                    while i < len(text):
+                        if text[i] == '"':
+                            # Check if this quote is escaped
+                            backslash_count = 0
+                            j = i - 1
+                            while j >= 0 and text[j] == "\\":
+                                backslash_count += 1
+                                j -= 1
+                            
+                            if backslash_count % 2 == 0:
+                                # Unescaped quote - check if it's the real end
+                                # Look ahead to see what follows
+                                next_pos = i + 1
+                                while next_pos < len(text) and text[next_pos] in ' \t\n\r':
+                                    next_pos += 1
+                                
+                                # If followed by JSON syntax, it's likely the end
+                                if (next_pos >= len(text) or 
+                                    text[next_pos] in ':,}]\n' or
+                                    (next_pos < len(text) - 1 and text[next_pos:next_pos+2] in ['/*', '//'])):
+                                    # This is the end quote
+                                    result.append(string_content)
+                                    result.append('"')
+                                    i = next_pos
+                                    break
+                                else:
+                                    # Internal quote - escape it
+                                    string_content += '\\"'
+                                    i += 1
                             else:
-                                # This is an internal quote that needs escaping
-                                result.append('\\"')
+                                # Already escaped quote
+                                string_content += '"'
+                                i += 1
+                        elif text[i] == '\\':
+                            # Handle escape sequences
+                            string_content += text[i]
+                            i += 1
+                            if i < len(text):
+                                string_content += text[i]
                                 i += 1
                         else:
-                            # Already escaped quote - keep as is
-                            result.append('"')
+                            string_content += text[i]
                             i += 1
-                    else:
-                        result.append(text[i])
-                        i += 1
-            else:
-                result.append(text[i])
-                i += 1
+                    
+                    # If we exited without finding end quote, just use what we have
+                    if i >= len(text):
+                        result.append(string_content)
+                        break
+                else:
+                    result.append(text[i])
+                    i += 1
+            
+            return "".join(result)
+            
+        except Exception:
+            # If anything goes wrong, return original text
+            return text
 
-        text = "".join(result)
+    @staticmethod
+    def handle_string_concatenation(text: str) -> str:
+        """
+        Handle JavaScript/Python-style string concatenation.
+        
+        Patterns handled:
+        - "string1" + "string2" -> "string1string2"
+        - "string1" + "string2" + "string3" -> "string1string2string3"
+        - ("string1" "string2") -> "string1string2" (Python implicit concatenation)
+        """
+        # Handle + operator concatenation
+        # Pattern: "string1" + "string2" with possible whitespace/newlines
+        plus_pattern = r'"([^"]*?)"\s*\+\s*"([^"]*?)"'
+        
+        # Keep applying until no more matches (handles multiple concatenations)
+        max_iterations = 10  # Safety limit
+        iteration = 0
+        while re.search(plus_pattern, text) and iteration < max_iterations:
+            iteration += 1
+            text = re.sub(plus_pattern, r'"\1\2"', text)
+        
+        # Handle Python-style parentheses concatenation
+        # Pattern: ("string1" "string2" "string3") -> "string1string2string3"
+        
+        # First, handle adjacent strings within parentheses
+        def fix_paren_concatenation(match):
+            content = match.group(1)
+            # Find all quoted strings within the parentheses
+            string_pattern = r'"([^"]*?)"'
+            strings = re.findall(string_pattern, content)
+            if strings:
+                # Concatenate all strings
+                combined = "".join(strings)
+                return f'"{combined}"'
+            return match.group(0)
+        
+        # Pattern to match parentheses containing multiple quoted strings
+        paren_pattern = r'\(\s*("(?:[^"\\]|\\.)*?"(?:\s+"(?:[^"\\]|\\.)*?")*)\s*\)'
+        text = re.sub(paren_pattern, fix_paren_concatenation, text)
+        
+        # Handle adjacent quoted strings (implicit concatenation)
+        # Pattern: "string1" "string2" -> "string1string2"
+        adjacent_pattern = r'"([^"]*?)"\s+"([^"]*?)"'
+        
+        iteration = 0
+        while re.search(adjacent_pattern, text) and iteration < max_iterations:
+            iteration += 1
+            text = re.sub(adjacent_pattern, r'"\1\2"', text)
+        
         return text
 
     @staticmethod
@@ -978,6 +988,9 @@ class JSONPreprocessor:
 
         # Quote unquoted values with special characters (before quote normalization)
         text = cls.quote_unquoted_values(text)
+
+        # Handle string concatenation early, before quote processing
+        text = cls.handle_string_concatenation(text)
 
         # Quote unquoted keys to ensure valid JSON
         text = cls.quote_unquoted_keys(text)
