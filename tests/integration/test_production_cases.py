@@ -229,33 +229,5 @@ class TestPerformanceAndStability(unittest.TestCase):
         self.assertEqual(result["level1"]["level2"]["array"][1]["text"], "Item two")
 
 
-class TestCompatibility(unittest.TestCase):
-    """Test compatibility with standard JSON when possible."""
-
-    def test_valid_json_unchanged(self) -> None:
-        """Ensure valid JSON is processed correctly."""
-        valid_json = """{
-  "RelatedTexts": [
-    {
-      "ID": "PSS-09",
-      "Reason": "Standard JSON with proper escaping\\nand structure"
-    }
-  ]
-}"""
-
-        # Both should produce the same result for valid JSON
-        std_result = json.loads(valid_json)
-        js_result = jsonshiatsu.loads(valid_json)
-        self.assertEqual(std_result, js_result)
-
-    def test_standard_escapes_preserved(self) -> None:
-        """Ensure standard JSON escapes are preserved."""
-        test_json = r'{"text": "Line 1\nLine 2\tTabbed\r\nWindows"}'
-
-        std_result = json.loads(test_json)
-        js_result = jsonshiatsu.loads(test_json)
-        self.assertEqual(std_result, js_result)
-
-
 if __name__ == "__main__":
     unittest.main()

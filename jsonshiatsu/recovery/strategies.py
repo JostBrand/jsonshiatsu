@@ -111,7 +111,7 @@ class PartialParser:
         self.recovery_level = recovery_level
         self.validator = LimitValidator(config.limits) if config.limits else None
 
-        self.current_path: list = []
+        self.current_path: List[str] = []
         self.result = PartialParseResult()
         self.error_reporter: Optional[ErrorReporter] = None
 

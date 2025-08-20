@@ -18,11 +18,10 @@ from .fast_transformer import OptimizedJSONPreprocessor
 
 
 class OptimizedParser:
-    """High-performance parser with optimized token processing."""
 
     def __init__(
         self,
-        tokens: List,
+        tokens: List[Any],
         config: ParseConfig,
         error_reporter: Optional[ErrorReporter] = None,
     ):
@@ -36,8 +35,7 @@ class OptimizedParser:
         self._token_cache = None
         self._token_cache_pos = -1
 
-    def current_token(self):
-        """Get current token with caching."""
+    def current_token(self) -> Any:
         if self._token_cache_pos != self.pos:
             if self.pos >= self.tokens_length:
                 self._token_cache = self.tokens[-1] if self.tokens else None
@@ -46,17 +44,15 @@ class OptimizedParser:
             self._token_cache_pos = self.pos
         return self._token_cache
 
-    def advance(self):
-        """Advance with cache invalidation."""
+    def advance(self) -> Any:
         token = self.current_token()
         if self.pos < self.tokens_length - 1:
             self.pos += 1
             self._token_cache_pos = -1
         return token
 
-    def skip_whitespace_and_newlines(self):
-        """Optimized whitespace skipping."""
-        from .lexer import TokenType
+    def skip_whitespace_and_newlines(self) -> None:
+        from .lexer import TokenType  # type: ignore
 
         while self.pos < self.tokens_length and self.tokens[self.pos].type in (
             TokenType.WHITESPACE,
@@ -66,12 +62,10 @@ class OptimizedParser:
         self._token_cache_pos = -1
 
     def parse(self) -> Any:
-        """Parse with optimized entry point."""
         self.skip_whitespace_and_newlines()
         return self.parse_value()
 
     def parse_value(self) -> Any:
-        """Optimized value parsing with fast dispatch."""
         from .lexer import TokenType
 
         self.skip_whitespace_and_newlines()
@@ -80,7 +74,6 @@ class OptimizedParser:
         if not token:
             raise ParseError("Unexpected end of input")
 
-        # Fast dispatch based on token type
         token_type = token.type
 
         if token_type == TokenType.STRING:
@@ -103,7 +96,7 @@ class OptimizedParser:
                     return float(value)
                 return int(value)
             except ValueError:
-                return 0  # Fallback for malformed numbers
+                return 0
 
         elif token_type == TokenType.BOOLEAN:
             self.advance()
@@ -131,7 +124,6 @@ class OptimizedParser:
             raise ParseError(f"Unexpected token: {token_type}", token.position)
 
     def parse_object_optimized(self) -> Dict[str, Any]:
-        """Highly optimized object parsing."""
         from .lexer import TokenType
 
         self.skip_whitespace_and_newlines()
@@ -140,12 +132,12 @@ class OptimizedParser:
             raise ParseError("Expected '{'", self.current_token().position)
 
         if self.validator:
-            self.validator.enter_structure(f"line {self.current_token().position.line}")
+            self.validator.enter_structure()
 
         self.advance()
         self.skip_whitespace_and_newlines()
 
-        obj = {}
+        obj: Dict[str, Any] = {}
         key_count = 0
 
         if self.current_token().type == TokenType.RBRACE:
@@ -164,9 +156,7 @@ class OptimizedParser:
                 key_count += 1
 
                 if self.validator and key_count % 50 == 0:
-                    self.validator.validate_object_size(
-                        key_count, f"line {key_token.position.line}"
-                    )
+                    self.validator.validate_object_keys(key_count)
             else:
                 raise ParseError("Expected object key", key_token.position)
 
@@ -211,12 +201,11 @@ class OptimizedParser:
             raise ParseError("Expected '}'", self.current_token().position)
 
         if self.validator:
-            self.validator.validate_object_size(key_count, "object end")
+            self.validator.validate_object_keys(key_count)
 
         return obj
 
     def parse_array_optimized(self) -> List[Any]:
-        """Highly optimized array parsing."""
         from .lexer import TokenType
 
         self.skip_whitespace_and_newlines()
@@ -225,12 +214,12 @@ class OptimizedParser:
             raise ParseError("Expected '['", self.current_token().position)
 
         if self.validator:
-            self.validator.enter_structure(f"line {self.current_token().position.line}")
+            self.validator.enter_structure()
 
         self.advance()
         self.skip_whitespace_and_newlines()
 
-        arr = []
+        arr: List[Any] = []
 
         if self.current_token().type == TokenType.RBRACKET:
             self.advance()
@@ -245,9 +234,7 @@ class OptimizedParser:
             arr.append(value)
 
             if self.validator and len(arr) % 500 == 0:
-                self.validator.validate_array_size(
-                    len(arr), f"line {self.current_token().position.line}"
-                )
+                self.validator.validate_array_items(len(arr))
 
             self.skip_whitespace_and_newlines()
 
@@ -271,7 +258,7 @@ class OptimizedParser:
             raise ParseError("Expected ']'", self.current_token().position)
 
         if self.validator:
-            self.validator.validate_array_size(len(arr), "array end")
+            self.validator.validate_array_items(len(arr))
 
         return arr
 
@@ -314,14 +301,16 @@ def parse_optimized(
         )
 
     if hasattr(text, "read"):
+        # Type narrow to TextIO
+        stream_text: TextIO = text  # type: ignore[assignment]
         if use_optimizations:
             streaming_parser = OptimizedStreamingParser(config)
-            return streaming_parser.parse_stream(text)
+            return streaming_parser.parse_stream(stream_text)
         else:
-            from .streaming import StreamingParser
+            from .streaming import StreamingParser  # type: ignore
 
             streaming_parser = StreamingParser(config)
-            return streaming_parser.parse_stream(text)
+            return streaming_parser.parse_stream(stream_text)
 
     if isinstance(text, str):
         if config.limits:
@@ -338,7 +327,7 @@ def parse_optimized(
                 streaming_parser = StreamingParser(config)
                 return streaming_parser.parse_stream(stream)
 
-        config._original_text = text
+        setattr(config, "_original_text", text)
         error_reporter = (
             ErrorReporter(text, config.max_error_context)
             if config.include_position
@@ -350,7 +339,7 @@ def parse_optimized(
                 text, aggressive=config.aggressive, config=config.preprocessing_config
             )
         else:
-            from .preprocessor import JSONPreprocessor
+            from .preprocessor import JSONPreprocessor  # type: ignore
 
             preprocessed_text = JSONPreprocessor.preprocess(
                 text, aggressive=config.aggressive, config=config.preprocessing_config
@@ -363,8 +352,8 @@ def parse_optimized(
                 parser = OptimizedParser(tokens, config, error_reporter)
                 return parser.parse()
             else:
-                from .lexer import Lexer
-                from .parser import Parser
+                from .lexer import Lexer  # type: ignore
+                from .parser import Parser  # type: ignore
 
                 lexer = Lexer(preprocessed_text)
                 tokens = lexer.get_all_tokens()
@@ -388,7 +377,7 @@ def parse_optimized(
 
 
 # Convenience function that always uses optimizations
-def fast_parse(text: Union[str, TextIO], **kwargs) -> Any:
+def fast_parse(text: Union[str, TextIO], **kwargs: Any) -> Any:
     """
     Ultra-fast JSON parsing with all optimizations enabled.
 

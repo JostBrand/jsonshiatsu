@@ -27,7 +27,6 @@ class StreamingLexer:
         self.eof_reached = False
 
     def _read_chunk(self) -> str:
-        """Read next chunk from stream."""
         if self.eof_reached:
             return ""
 
@@ -37,7 +36,6 @@ class StreamingLexer:
         return chunk
 
     def _ensure_buffer(self, min_chars: int) -> bool:
-        """Ensure buffer has at least min_chars available."""
         while len(self.buffer) < min_chars and not self.eof_reached:
             chunk = self._read_chunk()
             if not chunk:
@@ -46,7 +44,6 @@ class StreamingLexer:
         return len(self.buffer) >= min_chars
 
     def peek(self, offset: int = 0) -> str:
-        """Peek at character at offset without consuming."""
         if not self._ensure_buffer(offset + 1):
             return ""
 
@@ -55,7 +52,6 @@ class StreamingLexer:
         return ""
 
     def advance(self) -> str:
-        """Consume and return next character."""
         if not self._ensure_buffer(1):
             return ""
 
@@ -73,12 +69,10 @@ class StreamingLexer:
         return char
 
     def current_position(self) -> Position:
-        """Get current position in stream."""
         return self.position
 
 
 class StreamingParser:
-    """Streaming JSON parser for large files."""
 
     def __init__(self, config: ParseConfig):
         self.config = config
@@ -87,21 +81,14 @@ class StreamingParser:
         self.validator = LimitValidator(config.limits or ParseLimits())
 
     def parse_stream(self, stream: TextIO) -> Any:
-        """Parse JSON from a stream."""
-        # For very large streams, we need to be careful about preprocessing
-        # Read the stream in chunks and apply minimal preprocessing
 
-        # First, check if we can read a small portion to detect the format
         initial_chunk = stream.read(self.config.streaming_threshold // 10)
-        stream.seek(0)  # Reset stream
+        stream.seek(0)
 
-        # Apply preprocessing to the initial chunk to detect patterns
         preprocessed_sample = JSONPreprocessor.preprocess(
             initial_chunk, self.config.aggressive, self.config.preprocessing_config
         )
 
-        # If preprocessing made significant changes, we need to preprocess the
-        # whole stream
         if (
             len(preprocessed_sample) != len(initial_chunk)
             or preprocessed_sample != initial_chunk
@@ -111,8 +98,6 @@ class StreamingParser:
             return self._parse_direct_stream(stream)
 
     def _parse_with_preprocessing(self, stream: TextIO) -> Any:
-        """Parse stream that requires preprocessing."""
-        # Read entire stream for preprocessing (fallback for complex cases)
         content = stream.read()
         self.validator.validate_input_size(content)
 
@@ -121,7 +106,6 @@ class StreamingParser:
             content, self.config.aggressive, self.config.preprocessing_config
         )
 
-        # Parse using regular parser (import here to avoid circular imports)
         from ..core.engine import parse
 
         return parse(
@@ -354,7 +338,7 @@ class StreamingTokenParser:
         self.advance()
         self.skip_whitespace_and_newlines()
 
-        obj: dict = {}
+        obj: Dict[str, Any] = {}
         key_count = 0
 
         if self.current_token().type == TokenType.RBRACE:
@@ -432,7 +416,7 @@ class StreamingTokenParser:
         self.advance()
         self.skip_whitespace_and_newlines()
 
-        arr: list = []
+        arr: List[Any] = []
 
         if self.current_token().type == TokenType.RBRACKET:
             self.advance()

@@ -15,7 +15,6 @@ from ..core.tokenizer import Position, Token, TokenType
 
 
 class OptimizedLexer:
-    """High-performance lexer with optimized string operations and caching."""
 
     def __init__(self, text: str):
         self.text = text
@@ -24,7 +23,6 @@ class OptimizedLexer:
         self.line = 1
         self.column = 1
 
-        # Pre-compile character sets for faster lookups
         self._whitespace_chars = frozenset(" \t\r")
         self._digit_chars = frozenset("0123456789")
         self._alpha_chars = frozenset(
@@ -40,31 +38,27 @@ class OptimizedLexer:
             ",": TokenType.COMMA,
         }
 
-        # Position caching
         self._position_cache: Optional[Position] = None
         self._position_cache_pos = -1
 
     def current_position(self) -> Position:
-        """Get current position with caching optimization."""
         if self._position_cache_pos != self.pos:
             self._position_cache = Position(self.line, self.column)
             self._position_cache_pos = self.pos
-        return self._position_cache  # type: ignore[return-value]
+        assert self._position_cache is not None
+        return self._position_cache
 
     def peek(self, offset: int = 0) -> str:
-        """Peek at character with optimized bounds checking."""
         pos = self.pos + offset
         if pos >= self.text_length:
             return ""
         return self.text[pos]
 
     def peek_ahead(self, count: int) -> str:
-        """Peek ahead multiple characters efficiently."""
         end_pos = min(self.pos + count, self.text_length)
         return self.text[self.pos : end_pos]
 
     def advance(self) -> str:
-        """Advance position with optimized tracking."""
         if self.pos >= self.text_length:
             return ""
 
@@ -80,7 +74,6 @@ class OptimizedLexer:
         return char
 
     def advance_while(self, condition_func: Callable[[str], bool]) -> List[str]:
-        """Advance while condition is true, collecting characters efficiently."""
         chars = []
         while self.pos < self.text_length:
             char = self.text[self.pos]
@@ -96,7 +89,6 @@ class OptimizedLexer:
         return chars
 
     def skip_whitespace(self) -> None:
-        """Skip whitespace with optimized character set lookup."""
         while (
             self.pos < self.text_length
             and self.text[self.pos] in self._whitespace_chars
@@ -105,21 +97,19 @@ class OptimizedLexer:
             self.column += 1
 
     def read_string(self, quote_char: str) -> str:
-        """Read a quoted string with optimized string building."""
         chars = []
-        self.advance()  # Skip opening quote
+        self.advance()
 
         while self.pos < self.text_length:
             char = self.text[self.pos]
 
             if char == quote_char:
-                self.advance()  # Skip closing quote
+                self.advance()
                 break
             elif char == "\\":
-                self.advance()  # Skip backslash
+                self.advance()
                 if self.pos < self.text_length:
                     next_char = self.text[self.pos]
-                    # Use dict lookup for escape sequences (faster than if/elif chain)
                     escape_map = {
                         "n": "\n",
                         "t": "\t",
@@ -139,31 +129,24 @@ class OptimizedLexer:
         return "".join(chars)
 
     def read_number(self) -> str:
-        """Read a number with optimized character collection."""
         chars = []
 
-        # Handle negative sign
         if self.pos < self.text_length and self.text[self.pos] == "-":
             chars.append(self.advance())
 
-        # Handle numbers starting with decimal point
         if self.pos < self.text_length and self.text[self.pos] == ".":
             chars.append(self.advance())
-            # Read digits after decimal
             digit_chars = self.advance_while(lambda c: c in self._digit_chars)
             chars.extend(digit_chars)
         else:
-            # Read integer part
             digit_chars = self.advance_while(lambda c: c in self._digit_chars)
             chars.extend(digit_chars)
 
-            # Read decimal part
             if self.pos < self.text_length and self.text[self.pos] == ".":
                 chars.append(self.advance())
                 digit_chars = self.advance_while(lambda c: c in self._digit_chars)
                 chars.extend(digit_chars)
 
-        # Read exponent part
         if self.pos < self.text_length and self.text[self.pos].lower() == "e":
             chars.append(self.advance())
             if self.pos < self.text_length and self.text[self.pos] in "+-":
@@ -174,12 +157,10 @@ class OptimizedLexer:
         return "".join(chars)
 
     def read_identifier(self) -> str:
-        """Read an unquoted identifier with optimized character collection."""
         chars = self.advance_while(lambda c: c.isalnum() or c in "_$")
         return "".join(chars)
 
     def tokenize(self) -> Iterator[Token]:
-        """Generate tokens with optimized parsing."""
         while self.pos < self.text_length:
             self.skip_whitespace()
 
@@ -189,22 +170,18 @@ class OptimizedLexer:
             char = self.text[self.pos]
             pos = self.current_position()
 
-            # Newlines
             if char == "\n":
                 self.advance()
                 yield Token(TokenType.NEWLINE, char, pos)
 
-            # Structural characters (use dict lookup)
             elif char in self._struct_chars:
                 self.advance()
                 yield Token(self._struct_chars[char], char, pos)
 
-            # Quoted strings
             elif char in self._quote_chars:
                 string_value = self.read_string(char)
                 yield Token(TokenType.STRING, string_value, pos)
 
-            # Numbers (optimized condition checking)
             elif (
                 char in self._digit_chars
                 or (
@@ -221,11 +198,9 @@ class OptimizedLexer:
                 number_value = self.read_number()
                 yield Token(TokenType.NUMBER, number_value, pos)
 
-            # Identifiers and keywords
             elif char.isalpha() or char == "_":
                 identifier = self.read_identifier()
 
-                # Use dict lookup for keywords (faster than if/elif)
                 keyword_types = {
                     "true": TokenType.BOOLEAN,
                     "false": TokenType.BOOLEAN,
@@ -236,15 +211,12 @@ class OptimizedLexer:
                 yield Token(token_type, identifier, pos)
 
             else:
-                # Skip unknown characters
                 self.advance()
 
         yield Token(TokenType.EOF, "", self.current_position())
 
     def get_all_tokens(self) -> List[Token]:
-        """Get all tokens as a list with pre-allocated capacity."""
         tokens = []
-        # Pre-allocate based on rough estimate (1 token per 8 characters)
 
         for token in self.tokenize():
             tokens.append(token)
@@ -253,48 +225,37 @@ class OptimizedLexer:
 
 
 class FastLexer(OptimizedLexer):
-    """Ultra-fast lexer with additional optimizations for production use."""
 
     def __init__(self, text: str):
         super().__init__(text)
 
-        # Pre-scan for common patterns to optimize parsing
         self._has_quotes = '"' in text or "'" in text
         self._has_escapes = "\\" in text
         self._has_comments = "//" in text or "/*" in text
 
     def read_string_fast(self, quote_char: str) -> str:
-        """Ultra-fast string reading for strings without escapes."""
         if not self._has_escapes:
-            # Fast path for strings without escapes
-            start_pos = self.pos + 1  # Skip opening quote
+            start_pos = self.pos + 1
             end_pos = self.text.find(quote_char, start_pos)
 
             if end_pos != -1:
                 result = self.text[start_pos:end_pos]
-                # Update position efficiently
                 self.pos = end_pos + 1
                 self.column += end_pos - start_pos + 2
                 return result
 
-        # Fall back to standard method for complex strings
         return super().read_string(quote_char)
 
     def tokenize_fast(self) -> Iterator[Token]:
-        """Ultra-fast tokenization with optimized hot paths."""
         if not self._has_quotes and not self._has_comments:
-            # Ultra-fast path for simple JSON without strings or comments
             return self._tokenize_simple()
         else:
-            # Standard optimized path
             return super().tokenize()
 
     def _tokenize_simple(self) -> Iterator[Token]:
-        """Simplified tokenizer for basic JSON structures."""
         while self.pos < self.text_length:
             char = self.text[self.pos]
 
-            # Skip whitespace inline
             if char in self._whitespace_chars:
                 self.pos += 1
                 self.column += 1
@@ -329,9 +290,7 @@ class FastLexer(OptimizedLexer):
         yield Token(TokenType.EOF, "", Position(self.line, self.column))
 
 
-# Factory function for selecting optimal lexer
 def create_lexer(text: str, fast_mode: bool = True) -> OptimizedLexer:
-    """Create the most appropriate lexer for the given text."""
     if fast_mode and len(text) > 1000:
         return FastLexer(text)
     else:

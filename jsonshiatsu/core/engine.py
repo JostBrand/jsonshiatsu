@@ -4,7 +4,7 @@ Parser for jsonshiatsu - converts tokens into Python data structures.
 
 import io
 import json
-from typing import Any, Callable, Dict, List, Optional, TextIO, Union
+from typing import Any, Callable, Dict, List, Optional, TextIO, Tuple, Union
 
 from ..security.exceptions import (
     ErrorReporter,
@@ -58,7 +58,6 @@ class Parser:
             self.advance()
 
     def parse_value(self) -> Any:
-        """Parse a JSON value."""
         self.skip_whitespace_and_newlines()
         token = self.current_token()
 
@@ -94,9 +93,6 @@ class Parser:
             identifier_value = token.value
             self.advance()
 
-            # Handle function call patterns like Date("2025-08-01")
-            # If identifier is followed by a string, treat as function call and return
-            # the string value
             if self.current_token().type == TokenType.STRING and identifier_value in [
                 "Date",
                 "RegExp",
@@ -104,7 +100,6 @@ class Parser:
                 "UUID",
                 "ISODate",
             ]:
-                # Extract and return the actual value from inside the function call
                 string_value = self.current_token().value
                 self.advance()
                 return string_value
@@ -125,7 +120,6 @@ class Parser:
             )
 
     def parse_object(self) -> Dict[str, Any]:
-        """Parse a JSON object."""
         self.skip_whitespace_and_newlines()
 
         if self.current_token().type != TokenType.LBRACE:
@@ -136,7 +130,7 @@ class Parser:
         self.advance()
         self.skip_whitespace_and_newlines()
 
-        obj: dict = {}
+        obj: Dict[str, Any] = {}
 
         if self.current_token().type == TokenType.RBRACE:
             self.advance()
@@ -223,7 +217,6 @@ class Parser:
         return obj
 
     def parse_array(self) -> List[Any]:
-        """Parse a JSON array."""
         self.skip_whitespace_and_newlines()
 
         if self.current_token().type != TokenType.LBRACKET:
@@ -234,7 +227,7 @@ class Parser:
         self.advance()
         self.skip_whitespace_and_newlines()
 
-        arr: list = []
+        arr: List[Any] = []
 
         if self.current_token().type == TokenType.RBRACKET:
             self.advance()
@@ -244,7 +237,6 @@ class Parser:
         while True:
             self.skip_whitespace_and_newlines()
 
-            # Check if we've reached the end of the array
             if self.current_token().type == TokenType.RBRACKET:
                 break
 
@@ -254,7 +246,6 @@ class Parser:
 
                 self.validator.validate_array_items(len(arr))
             except ParseError:
-                # Only append None if we're not at array boundary
                 if self.current_token().type not in [
                     TokenType.RBRACKET,
                     TokenType.COMMA,
@@ -267,7 +258,6 @@ class Parser:
                 self.advance()
                 self.skip_whitespace_and_newlines()
 
-                # Handle trailing comma - if next token is closing bracket, exit
                 if self.current_token().type == TokenType.RBRACKET:
                     break
 
@@ -294,12 +284,10 @@ class Parser:
         return arr
 
     def parse(self) -> Any:
-        """Parse the tokens into a Python data structure."""
         self.skip_whitespace_and_newlines()
         return self.parse_value()
 
     def _unescape_string(self, s: str) -> str:
-        """Process standard JSON escape sequences in string values."""
         if "\\" not in s:
             return s
 
@@ -325,17 +313,14 @@ class Parser:
                 elif next_char == "t":
                     result.append("\t")
                 elif next_char == "u" and i + 5 < len(s):
-                    # Unicode escape sequence \uXXXX
                     try:
                         hex_digits = s[i + 2 : i + 6]
                         unicode_char = chr(int(hex_digits, 16))
                         result.append(unicode_char)
-                        i += 5  # Skip u and 4 hex digits
+                        i += 5
                     except (ValueError, OverflowError):
-                        # Invalid unicode escape, keep as-is
                         result.append(s[i])
                 else:
-                    # Unknown escape sequence, keep the backslash
                     result.append(s[i])
                     result.append(next_char)
                 i += 2
@@ -362,7 +347,7 @@ def loads(
     parse_float: Optional[Callable[[str], Any]] = None,
     parse_int: Optional[Callable[[str], Any]] = None,
     parse_constant: Optional[Callable[[str], Any]] = None,
-    object_pairs_hook: Optional[Callable[[List[tuple]], Any]] = None,
+    object_pairs_hook: Optional[Callable[[List[Tuple[str, Any]]], Any]] = None,
     # jsonshiatsu-specific parameters
     strict: bool = False,
     config: Optional[ParseConfig] = None,
@@ -443,7 +428,7 @@ def load(
     parse_float: Optional[Callable[[str], Any]] = None,
     parse_int: Optional[Callable[[str], Any]] = None,
     parse_constant: Optional[Callable[[str], Any]] = None,
-    object_pairs_hook: Optional[Callable[[List[tuple]], Any]] = None,
+    object_pairs_hook: Optional[Callable[[List[Tuple[str, Any]]], Any]] = None,
     # jsonshiatsu-specific parameters
     strict: bool = False,
     config: Optional[ParseConfig] = None,
@@ -642,7 +627,7 @@ def _apply_object_hook_recursively(
 
 
 def _apply_object_pairs_hook_recursively(
-    obj: Any, hook: Callable[[List[tuple]], Any]
+    obj: Any, hook: Callable[[List[Tuple[str, Any]]], Any]
 ) -> Any:
     """Apply the object_pairs_hook recursively."""
     if isinstance(obj, dict):
@@ -668,7 +653,7 @@ def dump(
     allow_nan: bool = True,
     cls: Optional[Any] = None,
     indent: Optional[Union[int, str]] = None,
-    separators: Optional[tuple] = None,
+    separators: Optional[Tuple[str, str]] = None,
     default: Optional[Callable[[Any], Any]] = None,
     sort_keys: bool = False,
     **kw: Any,
@@ -704,7 +689,7 @@ def dumps(
     allow_nan: bool = True,
     cls: Optional[Any] = None,
     indent: Optional[Union[int, str]] = None,
-    separators: Optional[tuple] = None,
+    separators: Optional[Tuple[str, str]] = None,
     default: Optional[Callable[[Any], Any]] = None,
     sort_keys: bool = False,
     **kw: Any,
@@ -746,7 +731,7 @@ class JSONDecoder(json.JSONDecoder):
         parse_int: Optional[Callable[[str], Any]] = None,
         parse_constant: Optional[Callable[[str], Any]] = None,
         strict: bool = True,
-        object_pairs_hook: Optional[Callable[[List[tuple]], Any]] = None,
+        object_pairs_hook: Optional[Callable[[List[Tuple[str, Any]]], Any]] = None,
     ) -> None:
         # Call super().__init__ with proper defaults to ensure compatibility
         super().__init__(
@@ -772,7 +757,7 @@ class JSONDecoder(json.JSONDecoder):
             strict=self.strict,
         )
 
-    def raw_decode(self, s: str, idx: int = 0) -> tuple:
+    def raw_decode(self, s: str, idx: int = 0) -> Tuple[Any, int]:
         """Decode a JSON string starting at idx."""
         try:
             result = self.decode(s[idx:])
@@ -787,7 +772,7 @@ class JSONDecoder(json.JSONDecoder):
         except json.JSONDecodeError:
             raise
 
-    def _scan_once(self, s: str, idx: int) -> tuple:
+    def _scan_once(self, s: str, idx: int) -> Tuple[Any, int]:
         """Internal method for compatibility."""
         return self.raw_decode(s, idx)
 

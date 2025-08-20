@@ -9,14 +9,66 @@ Key optimizations:
 """
 
 import re
+import signal
 from functools import lru_cache
-from typing import Any, Optional, Tuple
+from typing import Any, Match, Optional, Pattern, Tuple
+
+
+class RegexTimeout(Exception):
+    pass
+
+
+def timeout_handler(signum: int, frame: Any) -> None:
+    raise RegexTimeout("Regex operation timed out")
+
+
+def safe_pattern_search(
+    pattern: Pattern[str], string: str, timeout: int = 5
+) -> Optional[Match[str]]:
+    try:
+        signal.signal(signal.SIGALRM, timeout_handler)
+        signal.alarm(timeout)
+        result = pattern.search(string)
+        signal.alarm(0)
+        return result
+    except RegexTimeout:
+        return None
+    except Exception:
+        return None
+
+
+def safe_pattern_sub(
+    pattern: Pattern[str], repl: str, string: str, timeout: int = 5
+) -> str:
+    try:
+        signal.signal(signal.SIGALRM, timeout_handler)
+        signal.alarm(timeout)
+        result = pattern.sub(repl, string)
+        signal.alarm(0)
+        return result
+    except RegexTimeout:
+        return string
+    except Exception:
+        return string
+
+
+def safe_pattern_match(
+    pattern: Pattern[str], string: str, timeout: int = 5
+) -> Optional[Match[str]]:
+    try:
+        signal.signal(signal.SIGALRM, timeout_handler)
+        signal.alarm(timeout)
+        result = pattern.match(string)
+        signal.alarm(0)
+        return result
+    except RegexTimeout:
+        return None
+    except Exception:
+        return None
 
 
 class OptimizedJSONPreprocessor:
-    """High-performance preprocessor with compiled regex patterns."""
 
-    # Pre-compiled regex patterns for better performance
     _json_block_pattern = re.compile(
         r"```(?:json)?\s*\n?(.*?)\n?```", re.DOTALL | re.IGNORECASE
     )
@@ -32,7 +84,6 @@ class OptimizedJSONPreprocessor:
     )
     _unescaped_backslash = re.compile(r'\\(?![\\"/bfnrtux])')
 
-    # Boolean/null replacement patterns
     _boolean_patterns = [
         (re.compile(r"\bTrue\b"), "true"),
         (re.compile(r"\bFalse\b"), "false"),
@@ -42,7 +93,6 @@ class OptimizedJSONPreprocessor:
         (re.compile(r"\bundefined\b", re.IGNORECASE), "null"),
     ]
 
-    # Quote normalization dictionary for fast lookup
     _quote_replacements = {
         '"': '"',
         "„": '"',  # Smart double quotes
@@ -63,7 +113,6 @@ class OptimizedJSONPreprocessor:
     @classmethod
     @lru_cache(maxsize=128)
     def _detect_patterns(cls, text_preview: str) -> Tuple[bool, bool, bool, bool, bool]:
-        """Detect which preprocessing patterns are needed (cached for performance)."""
         has_markdown = "```" in text_preview
         has_comments = "//" in text_preview or "/*" in text_preview
         has_wrappers = "return " in text_preview or "(" in text_preview
@@ -84,18 +133,14 @@ class OptimizedJSONPreprocessor:
 
     @classmethod
     def extract_from_markdown(cls, text: str) -> str:
-        """Extract JSON from markdown with optimized regex."""
-        # Fast path: check if markdown patterns exist
         if "```" not in text and "`" not in text:
             return text
 
-        # Try fenced code blocks first (most common)
-        match = cls._json_block_pattern.search(text)
+        match = safe_pattern_search(cls._json_block_pattern, text)
         if match:
             return match.group(1).strip()
 
-        # Try inline code blocks
-        match = cls._inline_pattern.search(text)
+        match = safe_pattern_search(cls._inline_pattern, text)
         if match:
             return match.group(1).strip()
 
@@ -103,14 +148,11 @@ class OptimizedJSONPreprocessor:
 
     @classmethod
     def remove_trailing_text(cls, text: str) -> str:
-        """Remove trailing text with optimized structure detection."""
         text = text.strip()
 
-        # Fast path: if text doesn't end with }, ], or quote, likely no trailing text
         if not text or text[-1] not in "}\"'elE":
             return text
 
-        # Optimized bracket/brace counting with early termination
         brace_count = 0
         bracket_count = 0
         in_string = False
@@ -118,7 +160,6 @@ class OptimizedJSONPreprocessor:
         escaped = False
         last_valid_pos = -1
 
-        # Process in chunks for better performance on large strings
         chunk_size = 1000
         for chunk_start in range(0, len(text), chunk_size):
             chunk_end = min(chunk_start + chunk_size, len(text))
@@ -151,7 +192,6 @@ class OptimizedJSONPreprocessor:
                     elif char == "]":
                         bracket_count -= 1
 
-                    # Check for complete structure
                     if brace_count == 0 and bracket_count == 0 and char in "}\"'elE":
                         last_valid_pos = actual_pos
 
@@ -162,31 +202,24 @@ class OptimizedJSONPreprocessor:
 
     @classmethod
     def remove_comments(cls, text: str) -> str:
-        """Remove comments with optimized regex patterns."""
-        # Fast path: check if comments exist
         if "//" not in text and "/*" not in text:
             return text
 
-        # Remove single-line comments first (more common)
         if "//" in text:
-            text = cls._single_comment_pattern.sub("", text)
+            text = safe_pattern_sub(cls._single_comment_pattern, "", text)
 
-        # Remove block comments
         if "/*" in text:
-            text = cls._block_comment_pattern.sub("", text)
+            text = safe_pattern_sub(cls._block_comment_pattern, "", text)
 
         return text
 
     @classmethod
     def extract_first_json(cls, text: str) -> str:
-        """Extract first JSON with optimized bracket detection."""
         text = text.strip()
 
-        # Fast path: if text starts with { or [, likely already clean
         if text and text[0] in "{[":
             return cls._extract_first_structure_fast(text)
 
-        # Find first JSON structure start
         start_pos = -1
         for i, char in enumerate(text):
             if char in "{[":
@@ -200,7 +233,6 @@ class OptimizedJSONPreprocessor:
 
     @classmethod
     def _extract_first_structure_fast(cls, text: str) -> str:
-        """Fast structure extraction for well-formed JSON."""
         if not text:
             return text
 
@@ -235,7 +267,6 @@ class OptimizedJSONPreprocessor:
                 elif char == "]":
                     bracket_count -= 1
 
-                # Complete structure found
                 if brace_count == 0 and bracket_count == 0 and i > 0:
                     return text[: i + 1]
 
@@ -243,16 +274,13 @@ class OptimizedJSONPreprocessor:
 
     @classmethod
     def unwrap_function_calls(cls, text: str) -> str:
-        """Unwrap function calls with optimized pattern matching."""
         text = text.strip()
 
-        # Fast path: check for common wrapper patterns
         if not ("(" in text or "return" in text or "=" in text):
             return text
 
-        # Check patterns in order of likelihood
         for pattern in [cls._return_pattern, cls._func_pattern, cls._var_pattern]:
-            match = pattern.match(text)
+            match = safe_pattern_match(pattern, text)
             if match:
                 return match.group(1).strip()
 
@@ -260,12 +288,9 @@ class OptimizedJSONPreprocessor:
 
     @classmethod
     def normalize_quotes(cls, text: str) -> str:
-        """Normalize quotes with optimized character replacement."""
-        # Fast path: check if special quotes exist
         if not any(char in cls._quote_replacements for char in text):
             return text
 
-        # Replace special quotes
         for old_char, new_char in cls._quote_replacements.items():
             if old_char in text:
                 text = text.replace(old_char, new_char)
@@ -274,46 +299,37 @@ class OptimizedJSONPreprocessor:
 
     @classmethod
     def normalize_boolean_null(cls, text: str) -> str:
-        """Normalize boolean/null values with optimized pattern matching."""
-        # Fast path: check if patterns exist
         if not any(
             keyword in text
             for keyword in ["True", "False", "None", "yes", "no", "undefined"]
         ):
             return text
 
-        # Apply replacements efficiently
         for pattern, replacement in cls._boolean_patterns:
             if pattern.pattern.lower().replace("\\b", "") in text.lower():
-                text = pattern.sub(replacement, text)
+                text = safe_pattern_sub(pattern, replacement, text)
 
         return text
 
     @classmethod
     def fix_unescaped_strings(cls, text: str) -> str:
-        """Fix unescaped strings with intelligent path detection."""
-        # Fast path: check if backslashes exist
         if "\\" not in text:
             return text
 
-        # Use the same smart logic as the regular transformer
         from ..core.transformer import JSONPreprocessor
 
         return JSONPreprocessor.fix_unescaped_strings(text)
 
     @classmethod
     def handle_incomplete_json(cls, text: str) -> str:
-        """Handle incomplete JSON with fast bracket counting."""
         text = text.strip()
 
         if not text:
             return text
 
-        # Fast path: if text ends with proper closing, likely complete
         if text[-1] in "}\"'":
             return text
 
-        # Track unclosed structures efficiently
         stack = []
         in_string = False
         string_char = None
@@ -342,11 +358,9 @@ class OptimizedJSONPreprocessor:
                 elif char == "]" and stack and stack[-1] == "[":
                     stack.pop()
 
-        # Close unclosed strings
         if in_string and string_char:
             text += string_char
 
-        # Close unclosed structures
         closing_map = {"{": "}", "[": "]"}
         while stack:
             opener = stack.pop()
@@ -358,21 +372,18 @@ class OptimizedJSONPreprocessor:
     def preprocess(
         cls, text: str, aggressive: bool = False, config: Optional[Any] = None
     ) -> str:
-        """Optimized preprocessing with pattern detection and granular control."""
         if not text or not text.strip():
             return text
 
-        # Handle backward compatibility
         if config is None:
             from ..utils.config import PreprocessingConfig
 
             if aggressive:
                 config = PreprocessingConfig.aggressive()
             else:
-                config = PreprocessingConfig.aggressive()  # New default
+                config = PreprocessingConfig.aggressive()
 
-        # Detect patterns needed (cached for repeated similar inputs)
-        text_preview = text[:500]  # Sample for pattern detection
+        text_preview = text[:500]
         (
             has_markdown,
             has_comments,
@@ -381,7 +392,6 @@ class OptimizedJSONPreprocessor:
             has_python_bools,
         ) = cls._detect_patterns(text_preview)
 
-        # Apply transformations based on both pattern detection and config
         if config.extract_from_markdown and has_markdown:
             text = cls.extract_from_markdown(text)
 

@@ -9,7 +9,7 @@ Key optimizations:
 """
 
 from collections import deque
-from typing import Any, Dict, Iterator, List, Optional, TextIO
+from typing import Any, Deque, Dict, Iterator, List, Optional, TextIO
 
 from ..core.tokenizer import Position, Token, TokenType
 from ..core.transformer import JSONPreprocessor
@@ -24,7 +24,7 @@ class OptimizedStreamingLexer:
     def __init__(self, stream: TextIO, buffer_size: int = 16384):
         self.stream = stream
         self.buffer_size = buffer_size
-        self.buffer = deque()
+        self.buffer: Deque[str] = deque()
         self.position = Position(1, 1)
         self.eof_reached = False
 
@@ -90,7 +90,7 @@ class OptimizedStreamingLexer:
 
         return char
 
-    def advance_while(self, condition_func, max_chars: int = 1000) -> List[str]:
+    def advance_while(self, condition_func: Any, max_chars: int = 1000) -> List[str]:
         """Advance while condition is true, with batch operations."""
         chars = []
         count = 0
@@ -117,7 +117,7 @@ class OptimizedStreamingLexer:
         self, quote_char: str, validator: Optional[LimitValidator] = None
     ) -> str:
         """Optimized string reading with length validation."""
-        chars = []
+        chars: List[str] = []
         self.advance()  # Skip opening quote
 
         max_length = validator.limits.max_string_length if validator else float("inf")
@@ -201,11 +201,13 @@ class OptimizedStreamingParser:
 
     def __init__(self, config: ParseConfig):
         self.config = config
-        self.validator = LimitValidator(config.limits)
+        from ..utils.config import ParseLimits
+
+        self.validator = LimitValidator(config.limits or ParseLimits())
 
         # Object pools for performance
-        self._token_pool = []
-        self._position_pool = []
+        self._token_pool: List[Token] = []
+        self._position_pool: List[Position] = []
 
     def parse_stream(self, stream: TextIO) -> Any:
         """Parse JSON from stream with optimized path selection."""
@@ -246,7 +248,7 @@ class OptimizedStreamingParser:
         )
 
         # Parse using optimized lexer
-        from .optimized_lexer import create_lexer
+        from .optimized_lexer import create_lexer  # type: ignore
 
         lexer = create_lexer(preprocessed, fast_mode=True)
         tokens = lexer.get_all_tokens()
@@ -323,7 +325,7 @@ class OptimizedStreamingTokenParser:
         self.validator = validator
 
         # Performance optimizations
-        self._current_token_cache = None
+        self._current_token_cache: Optional[Token] = None
         self._current_token_pos = -1
 
     def current_token(self) -> Token:
@@ -338,6 +340,7 @@ class OptimizedStreamingTokenParser:
             else:
                 self._current_token_cache = self.tokens[self.pos]
             self._current_token_pos = self.pos
+        assert self._current_token_cache is not None
         return self._current_token_cache
 
     def advance(self) -> Token:
@@ -349,7 +352,7 @@ class OptimizedStreamingTokenParser:
             self._current_token_pos = -1
         return token
 
-    def skip_whitespace_and_newlines(self):
+    def skip_whitespace_and_newlines(self) -> None:
         """Optimized whitespace skipping."""
         while self.pos < self.tokens_length and self.tokens[self.pos].type in (
             TokenType.WHITESPACE,
@@ -410,12 +413,12 @@ class OptimizedStreamingTokenParser:
         if self.current_token().type != TokenType.LBRACE:
             raise ParseError("Expected '{'", self.current_token().position)
 
-        self.validator.enter_structure(f"line {self.current_token().position.line}")
+        self.validator.enter_structure()
         self.advance()
         self.skip_whitespace_and_newlines()
 
         # Pre-allocate dict for better performance
-        obj = {}
+        obj: Dict[str, Any] = {}
         key_count = 0
 
         if self.current_token().type == TokenType.RBRACE:
@@ -435,9 +438,7 @@ class OptimizedStreamingTokenParser:
 
                 # Batch validation to reduce overhead
                 if key_count % 100 == 0:  # Validate every 100 keys
-                    self.validator.validate_object_size(
-                        key_count, f"line {key_token.position.line}"
-                    )
+                    self.validator.validate_object_keys(key_count)
             else:
                 raise ParseError("Expected object key", key_token.position)
 
@@ -483,7 +484,7 @@ class OptimizedStreamingTokenParser:
             raise ParseError("Expected '}'", self.current_token().position)
 
         # Final validation
-        self.validator.validate_object_size(key_count, "object end")
+        self.validator.validate_object_keys(key_count)
 
         return obj
 
@@ -494,12 +495,12 @@ class OptimizedStreamingTokenParser:
         if self.current_token().type != TokenType.LBRACKET:
             raise ParseError("Expected '['", self.current_token().position)
 
-        self.validator.enter_structure(f"line {self.current_token().position.line}")
+        self.validator.enter_structure()
         self.advance()
         self.skip_whitespace_and_newlines()
 
         # Pre-allocate list for better performance
-        arr = []
+        arr: List[Any] = []
 
         if self.current_token().type == TokenType.RBRACKET:
             self.advance()
@@ -514,9 +515,7 @@ class OptimizedStreamingTokenParser:
 
             # Batch validation to reduce overhead
             if len(arr) % 1000 == 0:  # Validate every 1000 items
-                self.validator.validate_array_size(
-                    len(arr), f"line {self.current_token().position.line}"
-                )
+                self.validator.validate_array_items(len(arr))
 
             self.skip_whitespace_and_newlines()
 
@@ -539,6 +538,6 @@ class OptimizedStreamingTokenParser:
             raise ParseError("Expected ']'", self.current_token().position)
 
         # Final validation
-        self.validator.validate_array_size(len(arr), "array end")
+        self.validator.validate_array_items(len(arr))
 
         return arr

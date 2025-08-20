@@ -7,17 +7,14 @@ various malformed formats commonly found in real-world data.
 
 import re
 import signal
-from typing import Any, Callable, Match, Optional, Union
+from typing import Any, Callable, List, Match, Optional, Union
 
 
 class RegexTimeout(Exception):
-    """Exception raised when regex operations timeout."""
-
     pass
 
 
 def timeout_handler(signum: int, frame: Any) -> None:
-    """Handler for regex timeout."""
     raise RegexTimeout("Regex operation timed out")
 
 
@@ -28,7 +25,6 @@ def safe_regex_sub(
     flags: int = 0,
     timeout: int = 5,
 ) -> str:
-    """Safe regex substitution with timeout."""
     try:
         signal.signal(signal.SIGALRM, timeout_handler)
         signal.alarm(timeout)
@@ -44,11 +40,40 @@ def safe_regex_sub(
 def safe_regex_search(
     pattern: str, string: str, flags: int = 0, timeout: int = 5
 ) -> Optional[Match[str]]:
-    """Safe regex search with timeout."""
     try:
         signal.signal(signal.SIGALRM, timeout_handler)
         signal.alarm(timeout)
         result = re.search(pattern, string, flags=flags)
+        signal.alarm(0)
+        return result
+    except RegexTimeout:
+        return None
+    except Exception:
+        return None
+
+
+def safe_regex_findall(
+    pattern: str, string: str, flags: int = 0, timeout: int = 5
+) -> List[str]:
+    try:
+        signal.signal(signal.SIGALRM, timeout_handler)
+        signal.alarm(timeout)
+        result = re.findall(pattern, string, flags=flags)
+        signal.alarm(0)
+        return result
+    except RegexTimeout:
+        return []
+    except Exception:
+        return []
+
+
+def safe_regex_match(
+    pattern: str, string: str, flags: int = 0, timeout: int = 5
+) -> Optional[Match[str]]:
+    try:
+        signal.signal(signal.SIGALRM, timeout_handler)
+        signal.alarm(timeout)
+        result = re.match(pattern, string, flags=flags)
         signal.alarm(0)
         return result
     except RegexTimeout:
@@ -135,7 +160,6 @@ class JSONPreprocessor:
                 elif char == "]":
                     bracket_count -= 1
 
-                # Check if we have a complete structure
                 if brace_count == 0 and bracket_count == 0 and char in json_end_chars:
                     last_valid_pos = i
 
@@ -153,11 +177,7 @@ class JSONPreprocessor:
         - // line comments (but not URLs like https://)
         - /* block comments */
         """
-        # Remove /* block comments */ first
         text = safe_regex_sub(r"/\*.*?\*/", "", text, flags=re.DOTALL)
-
-        # Remove // line comments but NOT if they're part of URLs (https:// http://)
-        # Look for // that's not preceded by http: or https:
         text = safe_regex_sub(
             r"(?<!https:)(?<!http:)//.*?(?=\n|$)", "", text, flags=re.MULTILINE
         )
@@ -225,21 +245,18 @@ class JSONPreprocessor:
         """
         text = text.strip()
 
-        # Remove function calls like parse_json(...), JSON.parse(...), etc.
         func_pattern = r"^[a-zA-Z_][a-zA-Z0-9_.]*\s*\(\s*(.*)\s*\)\s*;?\s*$"
-        match = re.match(func_pattern, text, re.DOTALL)
+        match = safe_regex_search(func_pattern, text, re.DOTALL)
         if match:
             return match.group(1).strip()
 
-        # Remove return statements
         return_pattern = r"^return\s+(.*?)\s*;?\s*$"
-        match = re.match(return_pattern, text, re.DOTALL | re.IGNORECASE)
+        match = safe_regex_search(return_pattern, text, re.DOTALL | re.IGNORECASE)
         if match:
             return match.group(1).strip()
 
-        # Remove variable assignments
         var_pattern = r"^(?:const|let|var)\s+\w+\s*=\s*(.*?)\s*;?\s*$"
-        match = re.match(var_pattern, text, re.DOTALL | re.IGNORECASE)
+        match = safe_regex_search(var_pattern, text, re.DOTALL | re.IGNORECASE)
         if match:
             return match.group(1).strip()
 
@@ -284,7 +301,7 @@ class JSONPreprocessor:
         ]
 
         for pattern, replacement in patterns:
-            text = re.sub(pattern, replacement, text, flags=re.IGNORECASE)
+            text = safe_regex_sub(pattern, replacement, text, flags=re.IGNORECASE)
 
         return text
 
@@ -311,7 +328,7 @@ class JSONPreprocessor:
             # Check if value needs quoting
             # Quote if it contains special characters that make it invalid as an
             # identifier
-            needs_quoting = bool(re.search(r"[-./:#@?&=+%]", value))
+            needs_quoting = bool(safe_regex_search(r"[-./:#@?&=+%]", value))
 
             # Also quote if it looks like a URL, version number, or complex identifier
             if any(
@@ -320,9 +337,12 @@ class JSONPreprocessor:
             ):
                 needs_quoting = True
 
-            # Quote any string value that's not a valid JSON literal
-            # Don't quote simple boolean/null values or numbers
-            if value.lower() in ["true", "false", "null"]:
+            # Don't quote special JSON literal values
+            # These should remain unquoted for later processing
+            special_literals = ["NaN", "Infinity", "-Infinity", "undefined"]
+            if value in special_literals:
+                needs_quoting = False
+            elif value.lower() in ["true", "false", "null"]:
                 needs_quoting = False
             elif (
                 value.replace(".", "")
@@ -346,7 +366,7 @@ class JSONPreprocessor:
         # Look for: colon whitespace identifier
         pattern = r"(:\s*)([a-zA-Z_][a-zA-Z0-9_.-]*)\s*(?=[,\]}]|$)"
 
-        return re.sub(pattern, quote_value, text, flags=re.MULTILINE)
+        return safe_regex_sub(pattern, quote_value, text, flags=re.MULTILINE)
 
     @staticmethod
     def quote_unquoted_keys(text: str) -> str:
@@ -375,7 +395,7 @@ class JSONPreprocessor:
         # Capture context to avoid matching inside quoted strings
         pattern = r"(\s|^|[{,])([a-zA-Z_][a-zA-Z0-9_]*)(\s*:\s*)"
 
-        return re.sub(pattern, quote_key, text)
+        return safe_regex_sub(pattern, quote_key, text)
 
     @staticmethod
     def normalize_quotes(text: str) -> str:
@@ -425,17 +445,14 @@ class JSONPreprocessor:
         - yes/no -> true/false
         - undefined -> null
         """
-        # Handle Python-style booleans and None
-        text = re.sub(r"\bTrue\b", "true", text)
-        text = re.sub(r"\bFalse\b", "false", text)
-        text = re.sub(r"\bNone\b", "null", text)
+        text = safe_regex_sub(r"\bTrue\b", "true", text)
+        text = safe_regex_sub(r"\bFalse\b", "false", text)
+        text = safe_regex_sub(r"\bNone\b", "null", text)
 
-        # Handle yes/no
-        text = re.sub(r"\byes\b", "true", text, flags=re.IGNORECASE)
-        text = re.sub(r"\bno\b", "false", text, flags=re.IGNORECASE)
+        text = safe_regex_sub(r"\byes\b", "true", text, flags=re.IGNORECASE)
+        text = safe_regex_sub(r"\bno\b", "false", text, flags=re.IGNORECASE)
 
-        # Handle undefined
-        text = re.sub(r"\bundefined\b", "null", text, flags=re.IGNORECASE)
+        text = safe_regex_sub(r"\bundefined\b", "null", text, flags=re.IGNORECASE)
 
         return text
 
@@ -489,7 +506,9 @@ class JSONPreprocessor:
             # If the string contains valid JSON escape sequences (Unicode or
             # standard escapes),
             # be very conservative about treating it as a file path
-            has_json_escapes = re.search(r'\\[\\"/bfnrtu]|\\u[0-9a-fA-F]{4}', content)
+            has_json_escapes = safe_regex_search(
+                r'\\[\\"/bfnrtu]|\\u[0-9a-fA-F]{4}', content
+            )
 
             if has_json_escapes:
                 # Only treat as file path if it has strong file path indicators
@@ -499,7 +518,7 @@ class JSONPreprocessor:
                     or
                     # Contains drive letters (C:, D:, etc.) - must be start of string or
                     # after space/slash
-                    re.search(r"(?:^|[\s/\\])[a-zA-Z]:", content)
+                    safe_regex_search(r"(?:^|[\s/\\])[a-zA-Z]:", content)
                 )
             else:
                 # No JSON escapes - use broader file path detection
@@ -509,22 +528,24 @@ class JSONPreprocessor:
                     or
                     # Contains drive letters (C:, D:, etc.) - must be start of string or
                     # after space/slash
-                    re.search(r"(?:^|[\s/\\])[a-zA-Z]:", content)
+                    safe_regex_search(r"(?:^|[\s/\\])[a-zA-Z]:", content)
                     or
                     # Contains actual path separators (not JSON escape sequences)
                     # Only consider it a path if there are backslashes that are NOT
                     # valid JSON escapes
                     (
                         content.count("\\") >= 2
-                        and re.search(r'\\(?![\\"/bfnrtu]|u[0-9a-fA-F]{4})', content)
+                        and safe_regex_search(
+                            r'\\(?![\\"/bfnrtu]|u[0-9a-fA-F]{4})', content
+                        )
                     )
                     or
                     # Contains common file extensions (but not Unicode escapes)
                     # Must be a backslash followed by path components and an extension
-                    re.search(r"\\[^u\\]+\.[a-zA-Z0-9]{1,4}$", content)
+                    safe_regex_search(r"\\[^u\\]+\.[a-zA-Z0-9]{1,4}$", content)
                     or
                     # Or a regular path with extension at the end
-                    re.search(
+                    safe_regex_search(
                         r"[a-zA-Z0-9_-]+\.[a-zA-Z0-9]{1,4}$", content.split("\\")[-1]
                     )
                 )
@@ -536,13 +557,12 @@ class JSONPreprocessor:
             else:
                 # For non-path strings, only escape invalid JSON escapes
                 # This preserves intentional \n, \t, etc. and valid Unicode escapes
-                escaped_content = re.sub(
+                escaped_content = safe_regex_sub(
                     r'\\(?![\\"/bfnrtu]|u[0-9a-fA-F]{4})', r"\\\\", content
                 )
                 return f'"{escaped_content}"'
 
-        # Apply to all quoted strings
-        text = re.sub(r'"([^"]*)"', fix_file_paths, text)
+        text = safe_regex_sub(r'"([^"]*)"', fix_file_paths, text)
 
         return text
 
@@ -655,18 +675,56 @@ class JSONPreprocessor:
         Patterns handled:
         - "string1" + "string2" -> "string1string2"
         - "string1" + "string2" + "string3" -> "string1string2string3"
-        - ("string1" "string2") -> "string1string2" (Python implicit concatenation)
+        - ("string1" "string2") -> "string1string2" (Python implicit concat)
         """
-        # Handle + operator concatenation
-        # Pattern: "string1" + "string2" with possible whitespace/newlines
-        plus_pattern = r'"([^"]*?)"\s*\+\s*"([^"]*?)"'
 
-        # Keep applying until no more matches (handles multiple concatenations)
-        max_iterations = 10  # Safety limit
+        # Custom approach to handle string concatenation with proper
+        # escaped quote handling
+        def replace_concatenation(match: Match[str]) -> str:
+            # Extract the full match
+            full_match = match.group(0)
+
+            # Find the position of the + operator
+            plus_pos = full_match.find("+")
+            if plus_pos == -1:
+                return full_match
+
+            # Split the text at the plus operator
+            left_part = full_match[:plus_pos].strip()
+            right_part = full_match[plus_pos + 1 :].strip()
+
+            # Extract content from quoted strings
+            def extract_string_content(quoted_str: str) -> str:
+                if not (quoted_str.startswith('"') and quoted_str.endswith('"')):
+                    return quoted_str
+
+                # Remove surrounding quotes
+                content = quoted_str[1:-1]
+
+                # Handle escaped quotes correctly
+                # Replace escaped quotes with actual quotes
+                content = content.replace('\\"', '"')
+                return content
+
+            # Extract content from both parts
+            left_content = extract_string_content(left_part)
+            right_content = extract_string_content(right_part)
+
+            # Combine and return as a new quoted string
+            combined = left_content + right_content
+            # Escape any quotes in the combined content
+            combined = combined.replace('"', '\\"')
+            return f'"{combined}"'
+
+        # Pattern to match string concatenation with proper handling of escaped quotes
+        # This pattern looks for quoted strings separated by +
+        plus_pattern = r'"(?:[^"\\]|\\.)*"\s*\+\s*"(?:[^"\\]|\\.)*"'
+
+        max_iterations = 10
         iteration = 0
-        while re.search(plus_pattern, text) and iteration < max_iterations:
+        while safe_regex_search(plus_pattern, text) and iteration < max_iterations:
             iteration += 1
-            text = re.sub(plus_pattern, r'"\1\2"', text)
+            text = safe_regex_sub(plus_pattern, replace_concatenation, text)
 
         # Handle Python-style parentheses concatenation
         # Pattern: ("string1" "string2" "string3") -> "string1string2string3"
@@ -676,7 +734,7 @@ class JSONPreprocessor:
             content = match.group(1)
             # Find all quoted strings within the parentheses
             string_pattern = r'"([^"]*?)"'
-            strings = re.findall(string_pattern, content)
+            strings = safe_regex_findall(string_pattern, content)
             if strings:
                 # Concatenate all strings
                 combined = "".join(strings)
@@ -685,7 +743,7 @@ class JSONPreprocessor:
 
         # Pattern to match parentheses containing multiple quoted strings
         paren_pattern = r'\(\s*("(?:[^"\\]|\\.)*?"(?:\s+"(?:[^"\\]|\\.)*?")*)\s*\)'
-        text = re.sub(paren_pattern, fix_paren_concatenation, text)
+        text = safe_regex_sub(paren_pattern, fix_paren_concatenation, text)
 
         # Handle adjacent quoted strings (implicit concatenation)
         # But be careful not to merge JSON key-value pairs!
@@ -798,8 +856,27 @@ class JSONPreprocessor:
         if "```" in text or "json" in text.lower()[:100]:
             return original_text
 
-        # Remove "data:" prefixes from server-sent events
+        # Check if this looks like actual streaming response with SSE
+        # Look for typical SSE patterns
         lines = text.strip().split("\n")
+        has_sse_patterns = any(
+            line.strip() in ["[DONE]", "event: done", "event: error"]
+            or (
+                line.strip().startswith("data:")
+                and len(line.strip()) > 5  # Must have content after "data:"
+                and line.strip()[5:].strip().startswith(("{", "[", '"'))
+                and not any(
+                    keyword in line for keyword in ['"', "'", ":", "[", "]"]
+                )  # Not JSON syntax
+            )
+            for line in lines
+        )
+
+        # Only apply SSE processing if we actually have SSE patterns
+        if not has_sse_patterns:
+            return original_text
+
+        # Remove "data:" prefixes from server-sent events
         cleaned_lines = []
 
         for line in lines:
@@ -810,8 +887,15 @@ class JSONPreprocessor:
                 continue
 
             # Remove "data:" prefix from server-sent events
+            # But be more specific - only remove if it's clearly an SSE pattern
             if line.startswith("data:"):
-                line = line[5:].strip()
+                data_content = line[5:].strip()
+                # Only remove if it looks like SSE (not a JSON key)
+                if data_content.startswith(("{", "[", '"')) or ":" not in data_content:
+                    line = data_content
+                else:
+                    # Keep the line as-is if it's not clearly SSE
+                    pass
 
             cleaned_lines.append(line)
 
@@ -900,7 +984,7 @@ class JSONPreprocessor:
 
         # Normalize spaces around colons, but only for JSON key-value pairs
         # Pattern: "key" : value -> "key": value (avoid timestamp colons)
-        text = re.sub(r'"\s*:\s*(?![0-9])', '": ', text)
+        text = safe_regex_sub(r'"\s*:\s*(?![0-9])', '": ', text)
 
         # Handle unquoted keys with quote-aware processing
         def normalize_colons_outside_strings(text: str) -> str:
@@ -946,8 +1030,8 @@ class JSONPreprocessor:
         # Comma spacing is already handled by normalize_commas_outside_strings above
 
         # Clean up line breaks around braces
-        text = re.sub(r"{\s*\n\s*", "{\n    ", text)
-        text = re.sub(r"\n\s*}", "\n}", text)
+        text = safe_regex_sub(r"{\s*\n\s*", "{\n    ", text)
+        text = safe_regex_sub(r"\n\s*}", "\n}", text)
 
         return text
 
@@ -1048,42 +1132,35 @@ class JSONPreprocessor:
         Handles:
         - 'key': 'value' -> "key": "value"
         - Mixed quotes in same object
+        - Special handling for string concatenation patterns
         """
         # Don't process if text is too long to avoid performance issues
         if len(text) > 10000:
             return text
 
-        # Convert single quotes to double quotes, but be careful about escaped quotes
-        # Process character by character to handle nested quotes properly
-        result = []
-        i = 0
-        while i < len(text):
-            if text[i] == "'":
-                # Found single quote - extract the content
-                i += 1  # Skip opening quote
-                content = ""
-                while i < len(text) and text[i] != "'":
-                    if text[i] == '"':
-                        content += '\\"'  # Escape double quotes inside
-                    elif text[i] == "\\" and i + 1 < len(text):
-                        # Handle escape sequences
-                        content += text[i : i + 2]
-                        i += 1
-                    else:
-                        content += text[i]
-                    i += 1
-
-                if i < len(text):  # Found closing quote
-                    result.append(f'"{content}"')
-                    i += 1  # Skip closing quote
-                else:
-                    # No closing quote found
-                    result.append("'" + content)
+        # Handle string concatenation patterns first to avoid incorrect processing
+        # Pattern: 'string1" + "string2' -> "string1" + "string2"
+        def fix_concatenation_in_single_quotes(match: Match[str]) -> str:
+            full_match = match.group(0)
+            # Check if this contains a concatenation pattern
+            if '"' in full_match and " + " in full_match:
+                # This is likely concatenation - convert single quotes to double
+                # and preserve internal structure
+                content = match.group(1)
+                return f'"{content}"'
             else:
-                result.append(text[i])
-                i += 1
+                # Regular single-quoted string - convert with proper escaping
+                content = match.group(1)
+                content = content.replace('"', '\\"')
+                return f'"{content}"'
 
-        return "".join(result)
+        # Pattern to match single quoted strings
+        single_quote_pattern = r"'([^']*)'"
+        text = safe_regex_sub(
+            single_quote_pattern, fix_concatenation_in_single_quotes, text
+        )
+
+        return text
 
     @staticmethod
     def fix_multiline_strings(text: str) -> str:
@@ -1366,9 +1443,7 @@ class JSONPreprocessor:
                 # Remove + operators and quotes, then rejoin
                 content = content.replace("'", '"').replace(" + ", "").replace("+", "")
                 # Extract just the content parts
-                import re
-
-                string_contents = re.findall(r'"([^"]*)"', content)
+                string_contents = safe_regex_findall(r'"([^"]*)"', content)
                 if string_contents:
                     combined = "".join(string_contents)
                     return f'"{combined}"'
@@ -1387,7 +1462,7 @@ class JSONPreprocessor:
             for part in parts:
                 part = part.strip()
                 # Extract content from quoted string
-                match = re.match(r'"(.*)"', part)
+                match = safe_regex_match(r'"(.*)"', part)
                 if match:
                     content = match.group(1)
                     # Unescape the content
@@ -1429,7 +1504,6 @@ class JSONPreprocessor:
         Note: Only arrays support sparse elements. Objects with double commas
         are invalid.
         """
-        import re
 
         # FIRST: Clean up invalid object sparse syntax BEFORE processing arrays
         # This prevents ,, in objects from being converted to null
@@ -1444,7 +1518,7 @@ class JSONPreprocessor:
                 # AND don't contain [ or ] (indicating array context)
                 if ":" in line and "[" not in line and "]" not in line:
                     # Remove double commas in object context
-                    cleaned = re.sub(r",\s*,+", ",", line)
+                    cleaned = safe_regex_sub(r",\s*,+", ",", line)
                     result_lines.append(cleaned)
                 else:
                     result_lines.append(line)
@@ -1466,7 +1540,7 @@ class JSONPreprocessor:
             fixed_content = content
 
             # Handle leading commas: [, -> [null,
-            fixed_content = re.sub(r"^(\s*),", r"\1null,", fixed_content)
+            fixed_content = safe_regex_sub(r"^(\s*),", r"\1null,", fixed_content)
 
             # Handle multiple consecutive commas: ,, -> , null,
             while ",," in fixed_content:
@@ -1485,12 +1559,16 @@ class JSONPreprocessor:
         # Handle sparse arrays at multiple levels
         # First pass: handle simple arrays (no nested brackets)
         simple_array_pattern = r"\[([^\[\]]*?)\]"
-        text = re.sub(simple_array_pattern, fix_sparse_in_array, text)
+        text = safe_regex_sub(simple_array_pattern, fix_sparse_in_array, text)
 
         # Second pass: handle remaining sparse commas between elements at any level
         # Convert ", ," patterns to ", null," at any level
-        while ",," in text:
-            text = text.replace(",,", ", null,")
+        # Also handle ",," patterns (no spaces)
+        while ",," in text or ", ," in text:
+            if ",," in text:
+                text = text.replace(",,", ", null,")
+            if ", ," in text:
+                text = text.replace(", ,", ", null,")
 
         return text
 
