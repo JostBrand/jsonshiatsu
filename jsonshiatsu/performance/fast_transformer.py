@@ -45,7 +45,6 @@ class OptimizedJSONPreprocessor:
     # Quote normalization dictionary for fast lookup
     _quote_replacements = {
         '"': '"',
-        '"': '"',
         "„": '"',  # Smart double quotes
         """: "'", """: "'",
         "‚": "'",  # Smart single quotes
