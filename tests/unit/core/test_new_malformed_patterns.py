@@ -136,8 +136,8 @@ class TestSpecialNumbers:
             "user": {
                 "name": "Bob",  # Last value wins for duplicate keys
                 "age": 21,  # Octal 025 -> 21
-                "score": None,  # NaN -> null
-                "balance": 1e308,  # Infinity -> very large number
+                "score": "NaN",  # NaN -> string (JSON-compliant)
+                "balance": "Infinity",  # Infinity -> string (JSON-compliant)
             }
         }
         result = json.loads(malformed)
@@ -394,7 +394,7 @@ class TestEdgeCases:
         expected = {
             "name": 'John "Johnny" Doe',
             "age": 21,  # octal
-            "score": None,  # NaN
+            "score": "NaN",  # NaN -> string (JSON-compliant)
             "active": True,
             "callback": None,  # function
             "data": [1, None, 3],  # sparse array

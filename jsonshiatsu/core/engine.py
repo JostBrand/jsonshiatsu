@@ -26,33 +26,55 @@ class Parser:
         error_reporter: Optional[ErrorReporter] = None,
     ):
         self.tokens = tokens
+        self.tokens_length = len(tokens)  # Cache length for performance
         self.pos = 0
         self.config = config
         from ..utils.config import ParseLimits
 
-        self.validator = LimitValidator(config.limits or ParseLimits())
+        # Optional validator for performance when limits are not needed
+        self.validator = (
+            LimitValidator(config.limits or ParseLimits()) if config.limits else None
+        )
         self.error_reporter = error_reporter
+        # Token caching for performance
+        self._token_cache: Optional[Token] = None
+        self._token_cache_pos = -1
 
     def current_token(self) -> Token:
-        if self.pos >= len(self.tokens):
-            return self.tokens[-1]
-        return self.tokens[self.pos]
+        if self._token_cache_pos != self.pos:
+            if self.pos >= self.tokens_length:
+                if self.tokens:
+                    self._token_cache = self.tokens[-1]
+                else:
+                    # Create a dummy EOF token if no tokens exist
+                    self._token_cache = Token(TokenType.EOF, "", Position(0, 0))
+            else:
+                self._token_cache = self.tokens[self.pos]
+            self._token_cache_pos = self.pos
+        # At this point _token_cache is guaranteed to be not None
+        return self._token_cache  # type: ignore
 
     def peek_token(self, offset: int = 1) -> Token:
         pos = self.pos + offset
-        if pos >= len(self.tokens):
+        if pos >= self.tokens_length:
             return self.tokens[-1]
         return self.tokens[pos]
 
     def advance(self) -> Token:
         token = self.current_token()
-        if self.pos < len(self.tokens) - 1:
+        if self.pos < self.tokens_length - 1:
             self.pos += 1
+            self._token_cache_pos = -1  # Invalidate cache
         return token
 
     def skip_whitespace_and_newlines(self) -> None:
         while (
-            self.current_token().type in [TokenType.WHITESPACE, TokenType.NEWLINE]
+            self.pos < self.tokens_length
+            and self.tokens[self.pos].type
+            in (
+                TokenType.WHITESPACE,
+                TokenType.NEWLINE,
+            )
             and self.current_token().type != TokenType.EOF
         ):
             self.advance()
@@ -62,16 +84,18 @@ class Parser:
         token = self.current_token()
 
         if token.type == TokenType.STRING:
-            self.validator.validate_string_length(
-                token.value, f"line {token.position.line}"
-            )
+            if self.validator:
+                self.validator.validate_string_length(
+                    token.value, f"line {token.position.line}"
+                )
             self.advance()
             return self._unescape_string(token.value)
 
         elif token.type == TokenType.NUMBER:
-            self.validator.validate_number_length(
-                token.value, f"line {token.position.line}"
-            )
+            if self.validator:
+                self.validator.validate_number_length(
+                    token.value, f"line {token.position.line}"
+                )
             self.advance()
             value = token.value
             if "." in value or "e" in value.lower():
@@ -87,9 +111,10 @@ class Parser:
             return None
 
         elif token.type == TokenType.IDENTIFIER:
-            self.validator.validate_string_length(
-                token.value, f"line {token.position.line}"
-            )
+            if self.validator:
+                self.validator.validate_string_length(
+                    token.value, f"line {token.position.line}"
+                )
             identifier_value = token.value
             self.advance()
 
@@ -125,7 +150,8 @@ class Parser:
         if self.current_token().type != TokenType.LBRACE:
             self._raise_parse_error("Expected '{'", self.current_token().position)
 
-        self.validator.enter_structure()
+        if self.validator:
+            self.validator.enter_structure()
 
         self.advance()
         self.skip_whitespace_and_newlines()
@@ -134,7 +160,8 @@ class Parser:
 
         if self.current_token().type == TokenType.RBRACE:
             self.advance()
-            self.validator.exit_structure()
+            if self.validator:
+                self.validator.exit_structure()
             return obj
 
         while True:
@@ -183,7 +210,8 @@ class Parser:
             else:
                 obj[key] = value
 
-            self.validator.validate_object_keys(len(obj))
+            if self.validator:
+                self.validator.validate_object_keys(len(obj))
 
             self.skip_whitespace_and_newlines()
 
@@ -206,7 +234,8 @@ class Parser:
 
         if self.current_token().type == TokenType.RBRACE:
             self.advance()
-            self.validator.exit_structure()
+            if self.validator:
+                self.validator.exit_structure()
         else:
             self._raise_parse_error(
                 "Expected '}' to close object",
@@ -222,7 +251,8 @@ class Parser:
         if self.current_token().type != TokenType.LBRACKET:
             self._raise_parse_error("Expected '['", self.current_token().position)
 
-        self.validator.enter_structure()
+        if self.validator:
+            self.validator.enter_structure()
 
         self.advance()
         self.skip_whitespace_and_newlines()
@@ -231,7 +261,8 @@ class Parser:
 
         if self.current_token().type == TokenType.RBRACKET:
             self.advance()
-            self.validator.exit_structure()
+            if self.validator:
+                self.validator.exit_structure()
             return arr
 
         while True:
@@ -244,7 +275,8 @@ class Parser:
                 value = self.parse_value()
                 arr.append(value)
 
-                self.validator.validate_array_items(len(arr))
+                if self.validator:
+                    self.validator.validate_array_items(len(arr))
             except ParseError:
                 if self.current_token().type not in [
                     TokenType.RBRACKET,
@@ -273,7 +305,8 @@ class Parser:
 
         if self.current_token().type == TokenType.RBRACKET:
             self.advance()
-            self.validator.exit_structure()
+            if self.validator:
+                self.validator.exit_structure()
         else:
             self._raise_parse_error(
                 "Expected ']' to close array",

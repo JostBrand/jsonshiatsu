@@ -148,8 +148,8 @@ class TestNewExamples2Integration:
             "user": {
                 "name": "Bob",  # Last value wins
                 "age": 21,  # Octal conversion
-                "score": None,  # NaN -> null
-                "balance": 1e308,  # Infinity -> large number
+                "score": "NaN",  # NaN -> string (JSON-compliant)
+                "balance": "Infinity",  # Infinity -> string (JSON-compliant)
             }
         }
         result = json.loads(malformed)

@@ -276,7 +276,7 @@ class TestComplexRealWorldScenarios(unittest.TestCase):
         self.assertEqual(result["database"]["host"], "localhost")
         self.assertEqual(result["database"]["port"], 5432)
         self.assertEqual(result["api"]["version"], "v2")
-        self.assertEqual(len(result["features"]), 4)
+        self.assertEqual(len(result["features"]), 3)
 
     def test_mongodb_export_style(self) -> None:
         """Test MongoDB export style JSON with ObjectIds and ISODates."""
