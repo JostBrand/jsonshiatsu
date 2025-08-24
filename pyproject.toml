@@ -4,7 +4,7 @@ build-backend = "poetry.core.masonry.api"
 
 [tool.poetry]
 name = "jsonshiatsu"
-version = "0.2.0"
+version = "0.2.1"
 description = "A therapeutic JSON parser that gently massages malformed JSON into shape"
 authors = ["Jost Brandstetter <brandstetterjost@gmail.com>"]
 license = "MIT"
