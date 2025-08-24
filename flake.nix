@@ -7,11 +7,18 @@
     pre-commit-hooks.url = "github:cachix/git-hooks.nix";
   };
 
-  outputs = { self, nixpkgs, flake-utils, pre-commit-hooks }:
-    flake-utils.lib.eachDefaultSystem (system:
+  outputs =
+    {
+      self,
+      nixpkgs,
+      flake-utils,
+      pre-commit-hooks,
+    }:
+    flake-utils.lib.eachDefaultSystem (
+      system:
       let
         pkgs = nixpkgs.legacyPackages.${system};
-        
+
         pre-commit-check = pre-commit-hooks.lib.${system}.run {
           src = ./.;
           hooks = {
@@ -19,22 +26,24 @@
             mypy.enable = true;
           };
         };
-        
+
         python = pkgs.python313;
-        pythonWithPkgs = python.withPackages (ps: with ps; [
-          pip
-          setuptools
-          wheel
-          pytest
-          pytest-cov
-          mypy
-          ruff
-          build
-        ]);
-        
+        pythonWithPkgs = python.withPackages (
+          ps: with ps; [
+            pip
+            setuptools
+            wheel
+            pytest
+            pytest-cov
+            mypy
+            ruff
+            build
+          ]
+        );
+
         devScripts = pkgs.writeScriptBin "dev-scripts" ''
           #!/usr/bin/env bash
-          
+
           case "$1" in
             "test")
               echo "Running tests..."
@@ -116,60 +125,66 @@
         };
 
         devShells.default = pkgs.mkShell {
-          buildInputs = with pkgs; [
-            pythonWithPkgs
-            
-            git
-            curl
-            jq
-            ruff
-            
-            gnumake
-            tree
-            valgrind
-            devScripts
-          ] ++ pre-commit-check.enabledPackages;
+          buildInputs =
+            with pkgs;
+            [
+              pythonWithPkgs
 
-          shellHook = pre-commit-check.shellHook + ''
-            echo "🤲 jsonshiatsu Development Environment"
-            echo "======================================"
-            echo ""
-            echo "Python: $(python --version)"
-            echo "Location: $(pwd)"
-            echo ""
-            echo "🎯 Ready to use! All dependencies included via Nix."
-            echo ""
-            echo "📚 Available commands:"
-            echo "  dev-scripts install-dev    # Install jsonshiatsu in development mode"
-            echo "  dev-scripts test-fast      # Run unit tests"
-            echo "  dev-scripts test           # Run all tests with coverage"
-            echo "  dev-scripts format         # Format code with ruff"
-            echo "  dev-scripts lint           # Run linting"
-            echo "  dev-scripts                # Show all available commands"
-            echo ""
-            echo "💡 No virtual environment needed! Python 3.13 + dev tools provided by Nix."
-            echo "   This completely avoids 'pip externally managed environment' errors."
-            echo ""
-            
-            # Set up development environment variables
-            export JSONSHIATSU_DEV=1
-            export PYTEST_ADDOPTS="--tb=short"
-            export PYTHONPATH="$(pwd):$PYTHONPATH"
-            
-            # Create necessary directories
-            mkdir -p {logs,tmp,build}
-            
-            # Add common ignore patterns to gitignore if it doesn't exist
-            if [ ! -f .gitignore ] || ! grep -q "^*.egg-info" .gitignore; then
-              echo "*.egg-info/" >> .gitignore
-              echo "__pycache__/" >> .gitignore
-              echo ".pytest_cache/" >> .gitignore
-              echo "htmlcov/" >> .gitignore
-              echo ".coverage" >> .gitignore
-              echo "build/" >> .gitignore
-              echo "dist/" >> .gitignore
-            fi
-          '';
+              git
+              curl
+              jq
+              ruff
+              pylint
+
+              gnumake
+              tree
+              valgrind
+              devScripts
+            ]
+            ++ pre-commit-check.enabledPackages;
+
+          shellHook =
+            pre-commit-check.shellHook
+            + ''
+              echo "🤲 jsonshiatsu Development Environment"
+              echo "======================================"
+              echo ""
+              echo "Python: $(python --version)"
+              echo "Location: $(pwd)"
+              echo ""
+              echo "🎯 Ready to use! All dependencies included via Nix."
+              echo ""
+              echo "📚 Available commands:"
+              echo "  dev-scripts install-dev    # Install jsonshiatsu in development mode"
+              echo "  dev-scripts test-fast      # Run unit tests"
+              echo "  dev-scripts test           # Run all tests with coverage"
+              echo "  dev-scripts format         # Format code with ruff"
+              echo "  dev-scripts lint           # Run linting"
+              echo "  dev-scripts                # Show all available commands"
+              echo ""
+              echo "💡 No virtual environment needed! Python 3.13 + dev tools provided by Nix."
+              echo "   This completely avoids 'pip externally managed environment' errors."
+              echo ""
+
+              # Set up development environment variables
+              export JSONSHIATSU_DEV=1
+              export PYTEST_ADDOPTS="--tb=short"
+              export PYTHONPATH="$(pwd):$PYTHONPATH"
+
+              # Create necessary directories
+              mkdir -p {logs,tmp,build}
+
+              # Add common ignore patterns to gitignore if it doesn't exist
+              if [ ! -f .gitignore ] || ! grep -q "^*.egg-info" .gitignore; then
+                echo "*.egg-info/" >> .gitignore
+                echo "__pycache__/" >> .gitignore
+                echo ".pytest_cache/" >> .gitignore
+                echo "htmlcov/" >> .gitignore
+                echo ".coverage" >> .gitignore
+                echo "build/" >> .gitignore
+                echo "dist/" >> .gitignore
+              fi
+            '';
 
           NIX_SHELL_PRESERVE_PROMPT = 1;
         };
@@ -178,29 +193,29 @@
         packages.default = pkgs.python313Packages.buildPythonPackage rec {
           pname = "jsonshiatsu";
           version = "0.1.0";
-          
+
           src = ./.;
-          
+
           format = "pyproject";
-          
+
           nativeBuildInputs = with pkgs.python313Packages; [
             setuptools
             wheel
           ];
-          
+
           propagatedBuildInputs = with pkgs.python313Packages; [
             # Add runtime dependencies here if any
           ];
-          
+
           checkInputs = with pkgs.python313Packages; [
             pytest
             pytest-cov
           ];
-          
+
           checkPhase = ''
             python -m pytest tests/unit/ -v
           '';
-          
+
           meta = with pkgs.lib; {
             description = "A therapeutic JSON parser that gently massages malformed JSON into shape";
             homepage = "https://github.com/yourusername/jsonshiatsu";
@@ -215,14 +230,14 @@
               ${pythonWithPkgs}/bin/python -m pytest tests/ -v
             '';
           };
-          
+
           demo = flake-utils.lib.mkApp {
             drv = pkgs.writeShellScriptBin "jsonshiatsu-demo" ''
               export PYTHONPATH="$(pwd):$PYTHONPATH"
               ${pythonWithPkgs}/bin/python examples/demo.py
             '';
           };
-          
+
           partial-demo = flake-utils.lib.mkApp {
             drv = pkgs.writeShellScriptBin "jsonshiatsu-partial-demo" ''
               export PYTHONPATH="$(pwd):$PYTHONPATH"
@@ -232,5 +247,6 @@
         };
 
         formatter = pkgs.nixpkgs-fmt;
-      });
+      }
+    );
 }

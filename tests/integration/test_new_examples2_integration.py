@@ -104,9 +104,8 @@ class TestNewExamples2Integration:
         result = json.loads(malformed)
         assert result == expected, f"Expected {expected}, got {result}"
 
-    @pytest.mark.xfail(reason="Complex URL handling in nested objects still has issues")
     def test_example_5_urls_multiline_strings(self) -> None:
-        """Test Example 5: URLs and multiline strings (currently failing)."""
+        """Test Example 5: URLs and multiline strings."""
         malformed = """{
                 "config": {
                     "debug": true,
@@ -125,13 +124,22 @@ class TestNewExamples2Integration:
                 "description": "This is a test
                 configuration file"
                 }"""
-        # This test is expected to fail for now
-        try:
-            json.loads(malformed)
-            # If it passes, great!
-        except Exception:
-            # If not, that's expected
-            pass
+        expected = {
+            "config": {
+                "debug": True,
+                "timeout": 5000,
+                "endpoints": {
+                    "api": "https://api.example.com",
+                    "auth": "https://auth.example.com",
+                    "backup": "https://backup.example.com"
+                }
+            },
+            "features": ["feature1", "feature2"],
+            "version": "1.2.3",
+            "description": "This is a test\nconfiguration file"
+        }
+        result = json.loads(malformed)
+        assert result == expected, f"Expected {expected}, got {result}"
 
     def test_example_6_special_numbers_duplicates(self) -> None:
         """Test Example 6: Special numbers and duplicate keys."""
@@ -224,11 +232,8 @@ class TestNewExamples2Integration:
         assert result["data"] == [1, 2, 3, 4, None, 6]  # Sparse array
         assert isinstance(result["timestamp"], str)  # Unclosed string fixed
 
-    @pytest.mark.xfail(
-        reason="Complex template literals with variables still have issues"
-    )
     def test_example_10_complex_template_literals(self) -> None:
-        """Test Example 10: Complex template literals (currently failing)."""
+        """Test Example 10: Complex template literals."""
         malformed = """{
                 "mixed": 'single" + "double',
                 "regex": /pattern/gi,
@@ -236,13 +241,15 @@ class TestNewExamples2Integration:
                 "calculation": 10 + 5,
                 "template": `Hello ${name}`,
                 }"""
-        # This test is expected to fail for now due to complex template literal handling
-        try:
-            json.loads(malformed)
-            # If it passes, great!
-        except Exception:
-            # If not, that's expected
-            pass
+        expected = {
+            "mixed": "singledouble",  # String concatenation
+            "regex": "pattern",  # Regex literal -> string
+            "date": None,  # Constructor call -> null
+            "calculation": 15,  # Arithmetic expression
+            "template": "Hello ${name}",  # Template literal preserved as string
+        }
+        result = json.loads(malformed)
+        assert result == expected, f"Expected {expected}, got {result}"
 
 
 if __name__ == "__main__":
