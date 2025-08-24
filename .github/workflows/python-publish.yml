@@ -48,11 +48,10 @@ jobs:
         run: poetry build
 
       - name: Generate release notes
-        id: release_notes
         run: |
           # Extract version from tag
           VERSION=${GITHUB_REF#refs/tags/}
-          echo "VERSION=$VERSION" >> $GITHUB_OUTPUT
+          echo "VERSION=$VERSION" >> $GITHUB_ENV
           
           # Generate release notes from recent commits
           if git describe --tags --abbrev=0 HEAD^ >/dev/null 2>&1; then
@@ -74,16 +73,15 @@ jobs:
           fi
 
       - name: Create GitHub Release
-        uses: actions/create-release@v1
-        id: create_release
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ github.ref_name }}
-          release_name: Release ${{ steps.release_notes.outputs.VERSION }}
+          name: Release ${{ env.VERSION }}
           body_path: release_notes.md
           draft: false
           prerelease: ${{ contains(github.ref_name, 'alpha') || contains(github.ref_name, 'beta') || contains(github.ref_name, 'rc') }}
+          files: |
+            dist/*
 
   publish:
     needs: release
