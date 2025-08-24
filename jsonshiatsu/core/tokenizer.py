@@ -2,9 +2,10 @@
 Lexer for jsonshiatsu - tokenizes input strings for parsing.
 """
 
+from collections.abc import Iterator
 from dataclasses import dataclass
 from enum import Enum
-from typing import Iterator, List, NamedTuple, Optional
+from typing import NamedTuple, Optional
 
 
 class TokenType(Enum):
@@ -301,5 +302,5 @@ class Lexer:
 
         yield Token(TokenType.EOF, "", self.current_position())
 
-    def get_all_tokens(self) -> List[Token]:
+    def get_all_tokens(self) -> list[Token]:
         return list(self.tokenize())

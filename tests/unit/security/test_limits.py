@@ -83,7 +83,7 @@ class TestLimitValidator(unittest.TestCase):
     def test_nesting_depth_validation_pass(self):
         """Test nesting depth validation within limits."""
         # Enter structures within the limit (5)
-        for i in range(5):
+        for _i in range(5):
             self.validator.enter_structure()
 
         # Should be at max depth but not over
@@ -92,7 +92,7 @@ class TestLimitValidator(unittest.TestCase):
     def test_nesting_depth_validation_fail(self):
         """Test nesting depth validation exceeding limits."""
         # Enter 5 structures to reach limit
-        for i in range(5):
+        for _i in range(5):
             self.validator.enter_structure()
 
         # Attempting to enter 6th structure should fail

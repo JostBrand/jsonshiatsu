@@ -1,49 +1,88 @@
-# Jsonshiatsu Examples
+# jsonshiatsu Examples
 
-This directory contains comprehensive examples demonstrating the full capabilities of jsonshiatsu.
+This directory contains a comprehensive demonstration of jsonshiatsu's capabilities.
 
-## 🌟 Ultimate Malformed Example
+## 🌟 Comprehensive Demo
 
-**File:** `ultimate_malformed_example.py`
+**File:** `comprehensive_demo.py`
 
-This is the most comprehensive example that demonstrates **ALL** features promised by jsonshiatsu in a single malformed JSON. It includes:
+The **complete showcase** of all jsonshiatsu features in one organized demonstration. Perfect for:
 
-### ✅ Complete Feature Coverage (18 features):
+- **Learning** what jsonshiatsu can do
+- **Testing** all library capabilities  
+- **Presentations** and demonstrations
+- **Getting started** quickly
 
-1. **Unquoted object keys**: `{test: "value"}`
-2. **Single quotes**: `{'test': 'value'}`  
-3. **Mixed quotes**: `{"test": 'value'}`
-4. **Trailing commas**: `{"test": "value",}`
-5. **Unquoted string values**: `{test: value}`
-6. **Embedded quotes**: Proper escaping of quotes in strings
-7. **Newlines in strings**: `\n`, `\t`, etc.
-8. **Markdown code blocks**: Extract JSON from ````json ... ``` blocks
-9. **Trailing explanatory text**: `{"result": "success"} This indicates completion`
-10. **JavaScript-style comments**: `// line` and `/* block */` comments
-11. **Function call wrappers**: `Date()`, `ObjectId()`, `RegExp()`, etc.
-12. **Multiple JSON objects**: Extract first valid JSON from multiple objects
-13. **Non-standard boolean/null**: `True`/`False`, `yes`/`no`, `None`, `undefined`
-14. **Non-standard quotes**: Smart quotes (`""`), guillemets (`«»`), CJK (`「」`), backticks
-15. **Incomplete structures**: Auto-complete missing braces/brackets
-16. **All escape sequences**: `\n`, `\t`, `\\`, `\"`, `\/`, Unicode escapes
-17. **Sparse arrays**: `[1,, 3]`, `[,,]`, `[,]` patterns
-18. **Scientific notation**: `1.23e-10`
+### 🚀 Run the Demo
 
-### 🚀 Usage:
-
-```python
+```bash
 # Run the complete demonstration
-python examples/ultimate_malformed_example.py
+python examples/comprehensive_demo.py
 
-# Or import and use in your code
-from examples.ultimate_malformed_example import ULTIMATE_MALFORMED_JSON, get_parsed_result
-import jsonshiatsu
-
-result = jsonshiatsu.loads(ULTIMATE_MALFORMED_JSON)
-print(result)
+# Or run from project root
+python -m examples.comprehensive_demo
 ```
 
-### 💡 Perfect for showcasing:
+### 📋 What's Included
+
+The demo covers **ALL** jsonshiatsu capabilities:
+
+#### **Basic Malformed JSON Handling**
+- Unquoted keys: `{test: "value"}`
+- Single quotes: `{'key': 'value'}`
+- Mixed quotes: `{"key": 'value'}`
+- Trailing commas: `{"key": "value",}`
+- Unquoted values: `{key: value}`
+- JavaScript comments: `// and /* */`
+- Python booleans: `True/False/None`
+
+#### **Advanced Preprocessing**
+- Markdown code blocks: Extract JSON from ````json ... ``` blocks
+- Function call wrappers: `Date()`, `ObjectId()`, `RegExp()`, etc.
+- Non-standard quotes: Smart quotes (`""`), guillemets (`«»`), CJK (`「」`)
+- Sparse arrays: `[1,, 3]`, `[,,]`, `[,]` patterns
+- Complex configurations with mixed malformation types
+
+#### **Error Handling & Recovery**
+- Enhanced error reporting with position and context
+- Partial data recovery from broken JSON
+- Skip invalid fields while preserving valid data
+- Multiple recovery levels and strategies
+
+#### **Security & Limits**
+- Input size limits for DoS protection
+- String length and nesting depth controls
+- Object keys and array items limits
+- Production-ready security configurations
+
+#### **Streaming Capabilities**
+- Large JSON efficient processing
+- Stream from files, StringIO, or other sources
+- Performance comparisons vs regular parsing
+- Streaming with preprocessing enabled
+
+#### **Real-World Use Cases**
+- LLM API responses (often malformed)
+- Legacy configuration files
+- Log file processing with mixed formats
+- MongoDB exports with function calls
+- Web scraping "almost JSON" data
+
+#### **Performance Analysis**
+- Comparison with standard `json` library
+- Overhead analysis for valid JSON
+- Advantage demonstration for malformed JSON
+
+### 🎯 Key Benefits Demonstrated
+
+1. **Robustness**: Handles JSON that breaks everything else
+2. **Flexibility**: Multiple parsing modes and configurations
+3. **Security**: Built-in protections against malicious input
+4. **Performance**: Efficient processing even for large data
+5. **Recovery**: Extract valid data from partially broken JSON
+6. **Production-Ready**: Comprehensive error handling and limits
+
+### 💡 Perfect for Showcasing
 
 - **LLM API responses** (often contain mixed formatting)
 - **Legacy configuration files** (loose syntax rules)  
@@ -51,10 +90,33 @@ print(result)
 - **JavaScript object literals** (used in web development)
 - **MongoDB exports** (ObjectId, ISODate functions)
 
-This example proves that jsonshiatsu truly is the most robust JSON parser for handling real-world malformed data!
+## 🌟 Ultimate Malformed Example
 
-## 🎯 Key Takeaway
+The demo includes the **Ultimate Malformed JSON Example** that demonstrates ALL 18 promised features in a single JSON structure. This proves that jsonshiatsu truly is the most robust JSON parser for handling real-world malformed data!
 
-While Python's standard `json.loads()` would **completely fail** on this malformed JSON nightmare, jsonshiatsu gracefully parses it into clean, valid Python data structures with all malformations resolved.
+While Python's standard `json.loads()` would **completely fail** on these examples, jsonshiatsu gracefully parses them into clean, valid Python data structures.
 
 **That's the power of jsonshiatsu! 🔥**
+
+## 🚀 Quick Start
+
+```python
+import jsonshiatsu
+
+# The kind of JSON that breaks standard parsers
+malformed = """
+{
+    name: "Alice",           // Unquoted key
+    'age': 30,              // Single quotes  
+    "city": 'New York',     // Mixed quotes
+    "tags": ["user", "active",],  // Trailing comma
+    active: true,           // Unquoted boolean
+}
+"""
+
+# jsonshiatsu handles it effortlessly
+result = jsonshiatsu.loads(malformed)
+print(result)  # Clean Python dictionary!
+```
+
+Run the comprehensive demo to see hundreds more examples like this! 🎉

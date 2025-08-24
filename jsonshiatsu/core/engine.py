@@ -4,7 +4,7 @@ Parser for jsonshiatsu - converts tokens into Python data structures.
 
 import io
 import json
-from typing import Any, Callable, Dict, List, Optional, TextIO, Tuple, Union
+from typing import Any, Callable, Optional, TextIO, Union
 
 from ..security.exceptions import (
     ErrorReporter,
@@ -21,7 +21,7 @@ from .transformer import JSONPreprocessor
 class Parser:
     def __init__(
         self,
-        tokens: List[Token],
+        tokens: list[Token],
         config: ParseConfig,
         error_reporter: Optional[ErrorReporter] = None,
     ):
@@ -144,7 +144,7 @@ class Parser:
                 ErrorSuggestionEngine.suggest_for_unexpected_token(str(token.value)),
             )
 
-    def parse_object(self) -> Dict[str, Any]:
+    def parse_object(self) -> dict[str, Any]:
         self.skip_whitespace_and_newlines()
 
         if self.current_token().type != TokenType.LBRACE:
@@ -156,7 +156,7 @@ class Parser:
         self.advance()
         self.skip_whitespace_and_newlines()
 
-        obj: Dict[str, Any] = {}
+        obj: dict[str, Any] = {}
 
         if self.current_token().type == TokenType.RBRACE:
             self.advance()
@@ -245,7 +245,7 @@ class Parser:
 
         return obj
 
-    def parse_array(self) -> List[Any]:
+    def parse_array(self) -> list[Any]:
         self.skip_whitespace_and_newlines()
 
         if self.current_token().type != TokenType.LBRACKET:
@@ -257,7 +257,7 @@ class Parser:
         self.advance()
         self.skip_whitespace_and_newlines()
 
-        arr: List[Any] = []
+        arr: list[Any] = []
 
         if self.current_token().type == TokenType.RBRACKET:
             self.advance()
@@ -364,7 +364,7 @@ class Parser:
         return "".join(result)
 
     def _raise_parse_error(
-        self, message: str, position: Position, suggestions: Optional[List[str]] = None
+        self, message: str, position: Position, suggestions: Optional[list[str]] = None
     ) -> None:
         if self.error_reporter:
             raise self.error_reporter.create_parse_error(message, position, suggestions)
@@ -376,11 +376,11 @@ def loads(
     s: Union[str, bytes, bytearray],
     *,
     cls: Optional[Any] = None,
-    object_hook: Optional[Callable[[Dict[str, Any]], Any]] = None,
+    object_hook: Optional[Callable[[dict[str, Any]], Any]] = None,
     parse_float: Optional[Callable[[str], Any]] = None,
     parse_int: Optional[Callable[[str], Any]] = None,
     parse_constant: Optional[Callable[[str], Any]] = None,
-    object_pairs_hook: Optional[Callable[[List[Tuple[str, Any]]], Any]] = None,
+    object_pairs_hook: Optional[Callable[[list[tuple[str, Any]]], Any]] = None,
     # jsonshiatsu-specific parameters
     strict: bool = False,
     config: Optional[ParseConfig] = None,
@@ -457,11 +457,11 @@ def load(
     fp: TextIO,
     *,
     cls: Optional[Any] = None,
-    object_hook: Optional[Callable[[Dict[str, Any]], Any]] = None,
+    object_hook: Optional[Callable[[dict[str, Any]], Any]] = None,
     parse_float: Optional[Callable[[str], Any]] = None,
     parse_int: Optional[Callable[[str], Any]] = None,
     parse_constant: Optional[Callable[[str], Any]] = None,
-    object_pairs_hook: Optional[Callable[[List[Tuple[str, Any]]], Any]] = None,
+    object_pairs_hook: Optional[Callable[[list[tuple[str, Any]]], Any]] = None,
     # jsonshiatsu-specific parameters
     strict: bool = False,
     config: Optional[ParseConfig] = None,
@@ -553,7 +553,7 @@ def _parse_internal(text: Union[str, TextIO], config: ParseConfig) -> Any:
             return streaming_parser.parse_stream(stream)
 
         # Store original text for error reporting (dynamic attribute)
-        setattr(config, "_original_text", text)
+        config._original_text = text  # type: ignore[attr-defined]
         error_reporter = (
             ErrorReporter(text, config.max_error_context)
             if config.include_position
@@ -605,7 +605,7 @@ def _parse_internal(text: Union[str, TextIO], config: ParseConfig) -> Any:
                                 )
                                 return json.loads(cleaned)
                             except json.JSONDecodeError:
-                                raise e
+                                raise e from None
             else:
                 raise e
 
@@ -643,7 +643,7 @@ def _apply_parse_hooks(
 
 
 def _apply_object_hook_recursively(
-    obj: Any, hook: Callable[[Dict[str, Any]], Any]
+    obj: Any, hook: Callable[[dict[str, Any]], Any]
 ) -> Any:
     """Apply the object_hook recursively."""
     if isinstance(obj, dict):
@@ -660,7 +660,7 @@ def _apply_object_hook_recursively(
 
 
 def _apply_object_pairs_hook_recursively(
-    obj: Any, hook: Callable[[List[Tuple[str, Any]]], Any]
+    obj: Any, hook: Callable[[list[tuple[str, Any]]], Any]
 ) -> Any:
     """Apply the object_pairs_hook recursively."""
     if isinstance(obj, dict):
@@ -686,7 +686,7 @@ def dump(
     allow_nan: bool = True,
     cls: Optional[Any] = None,
     indent: Optional[Union[int, str]] = None,
-    separators: Optional[Tuple[str, str]] = None,
+    separators: Optional[tuple[str, str]] = None,
     default: Optional[Callable[[Any], Any]] = None,
     sort_keys: bool = False,
     **kw: Any,
@@ -722,7 +722,7 @@ def dumps(
     allow_nan: bool = True,
     cls: Optional[Any] = None,
     indent: Optional[Union[int, str]] = None,
-    separators: Optional[Tuple[str, str]] = None,
+    separators: Optional[tuple[str, str]] = None,
     default: Optional[Callable[[Any], Any]] = None,
     sort_keys: bool = False,
     **kw: Any,
@@ -759,12 +759,12 @@ class JSONDecoder(json.JSONDecoder):
     def __init__(
         self,
         *,
-        object_hook: Optional[Callable[[Dict[str, Any]], Any]] = None,
+        object_hook: Optional[Callable[[dict[str, Any]], Any]] = None,
         parse_float: Optional[Callable[[str], Any]] = None,
         parse_int: Optional[Callable[[str], Any]] = None,
         parse_constant: Optional[Callable[[str], Any]] = None,
         strict: bool = True,
-        object_pairs_hook: Optional[Callable[[List[Tuple[str, Any]]], Any]] = None,
+        object_pairs_hook: Optional[Callable[[list[tuple[str, Any]]], Any]] = None,
     ) -> None:
         # Call super().__init__ with proper defaults to ensure compatibility
         super().__init__(
@@ -790,7 +790,7 @@ class JSONDecoder(json.JSONDecoder):
             strict=self.strict,
         )
 
-    def raw_decode(self, s: str, idx: int = 0) -> Tuple[Any, int]:
+    def raw_decode(self, s: str, idx: int = 0) -> tuple[Any, int]:
         """Decode a JSON string starting at idx."""
         try:
             result = self.decode(s[idx:])
@@ -805,7 +805,7 @@ class JSONDecoder(json.JSONDecoder):
         except json.JSONDecodeError:
             raise
 
-    def _scan_once(self, s: str, idx: int) -> Tuple[Any, int]:
+    def _scan_once(self, s: str, idx: int) -> tuple[Any, int]:
         """Internal method for compatibility."""
         return self.raw_decode(s, idx)
 

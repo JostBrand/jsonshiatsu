@@ -165,7 +165,7 @@ class TestUnicodeNormalizationConflicts(unittest.TestCase):
         # Should have both keys as they have different representations
         self.assertEqual(len(result), 2)
         # The keys will be the actual Unicode characters, not the escape sequences
-        self.assertTrue(any("café" in key for key in result.keys()))
+        self.assertTrue(any("café" in key for key in result))
 
 
 class TestUnicodeEdgeCases(unittest.TestCase):

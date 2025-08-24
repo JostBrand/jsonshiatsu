@@ -5,7 +5,7 @@ This module defines security limits and configuration options for safe JSON pars
 """
 
 from dataclasses import dataclass
-from typing import Optional, Set
+from typing import Optional
 
 
 @dataclass
@@ -63,7 +63,7 @@ class PreprocessingConfig:
         return cls()
 
     @classmethod
-    def from_features(cls, enabled_features: Set[str]) -> "PreprocessingConfig":
+    def from_features(cls, enabled_features: set[str]) -> "PreprocessingConfig":
         config = cls()
         for field in config.__dataclass_fields__:
             setattr(config, field, field in enabled_features)

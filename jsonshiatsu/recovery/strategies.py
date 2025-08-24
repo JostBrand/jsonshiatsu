@@ -7,7 +7,7 @@ syntax errors, collecting valid data while reporting detailed error information.
 
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Optional
 
 from ..core.tokenizer import Lexer, Position, Token, TokenType
 from ..security.exceptions import ErrorReporter
@@ -69,10 +69,10 @@ class PartialParseResult:
     """Result of partial parsing with error recovery."""
 
     data: Any = None  # Successfully parsed data
-    errors: List[PartialParseError] = field(default_factory=list)
-    warnings: List[PartialParseError] = field(default_factory=list)
+    errors: list[PartialParseError] = field(default_factory=list)
+    warnings: list[PartialParseError] = field(default_factory=list)
     success_rate: float = 0.0  # Percentage of input successfully parsed
-    recovery_actions: List[RecoveryAction] = field(default_factory=list)
+    recovery_actions: list[RecoveryAction] = field(default_factory=list)
     total_fields: int = 0  # Total fields/elements encountered
     successful_fields: int = 0  # Successfully parsed fields/elements
 
@@ -100,7 +100,7 @@ class PartialParser:
 
     def __init__(
         self,
-        tokens: List[Token],
+        tokens: list[Token],
         config: ParseConfig,
         recovery_level: RecoveryLevel = RecoveryLevel.SKIP_FIELDS,
     ):
@@ -111,7 +111,7 @@ class PartialParser:
         self.recovery_level = recovery_level
         self.validator = LimitValidator(config.limits) if config.limits else None
 
-        self.current_path: List[str] = []
+        self.current_path: list[str] = []
         self.result = PartialParseResult()
         self.error_reporter: Optional[ErrorReporter] = None
 
@@ -178,7 +178,7 @@ class PartialParser:
 
         return error
 
-    def attempt_recovery(self, error: PartialParseError) -> Tuple[bool, Any]:
+    def attempt_recovery(self, error: PartialParseError) -> tuple[bool, Any]:
         """Attempt to recover from an error."""
         if self.recovery_level == RecoveryLevel.STRICT:
             return False, None
@@ -196,7 +196,7 @@ class PartialParser:
 
         return False, None
 
-    def _recover_missing_quotes(self, error: PartialParseError) -> Tuple[bool, Any]:
+    def _recover_missing_quotes(self, error: PartialParseError) -> tuple[bool, Any]:
         """Try to recover from missing quotes around keys/values."""
         if self.recovery_level not in [
             RecoveryLevel.BEST_EFFORT,
@@ -216,7 +216,7 @@ class PartialParser:
 
         return True, recovered_value
 
-    def _recover_trailing_comma(self, error: PartialParseError) -> Tuple[bool, Any]:
+    def _recover_trailing_comma(self, error: PartialParseError) -> tuple[bool, Any]:
         """Recover from trailing commas."""
         if self.recovery_level not in [
             RecoveryLevel.BEST_EFFORT,
@@ -234,7 +234,7 @@ class PartialParser:
 
         return False, None
 
-    def _recover_missing_colon(self, error: PartialParseError) -> Tuple[bool, Any]:
+    def _recover_missing_colon(self, error: PartialParseError) -> tuple[bool, Any]:
         """Recover from missing colon after object key."""
         # Look ahead to see if we can infer the structure
         next_token = self.peek_token()
@@ -251,7 +251,7 @@ class PartialParser:
 
         return False, None
 
-    def _recover_unclosed_string(self, error: PartialParseError) -> Tuple[bool, Any]:
+    def _recover_unclosed_string(self, error: PartialParseError) -> tuple[bool, Any]:
         """Recover from unclosed strings."""
         token = self.current_token()
         if not token:
@@ -265,7 +265,7 @@ class PartialParser:
 
         return True, recovered_value
 
-    def _recover_invalid_value(self, error: PartialParseError) -> Tuple[bool, Any]:
+    def _recover_invalid_value(self, error: PartialParseError) -> tuple[bool, Any]:
         """Recover from invalid values by inference."""
         token = self.current_token()
         if not token:
@@ -304,7 +304,7 @@ class PartialParser:
                 break
             self.advance()
 
-    def parse_value_with_recovery(self) -> Tuple[Any, bool]:
+    def parse_value_with_recovery(self) -> tuple[Any, bool]:
         """Parse a value with error recovery."""
         self.skip_whitespace_and_newlines()
         token = self.current_token()
@@ -394,7 +394,7 @@ class PartialParser:
             self.skip_to_recovery_point()
             return None, False
 
-    def parse_object_with_recovery(self) -> Tuple[Dict[str, Any], bool]:
+    def parse_object_with_recovery(self) -> tuple[dict[str, Any], bool]:
         """Parse an object with error recovery."""
         self.skip_whitespace_and_newlines()
 
@@ -410,7 +410,7 @@ class PartialParser:
         self.advance()
         self.skip_whitespace_and_newlines()
 
-        obj: Dict[str, Any] = {}
+        obj: dict[str, Any] = {}
         obj_success = True
 
         current_token = self.current_token()
@@ -432,9 +432,8 @@ class PartialParser:
                 value,
             ) = self._parse_object_pair_with_recovery()
 
-            if key_success and key is not None:
-                if value_success:
-                    obj[key] = value
+            if key_success and key is not None and value_success:
+                obj[key] = value
 
             self.skip_whitespace_and_newlines()
 
@@ -502,7 +501,7 @@ class PartialParser:
 
         return obj, obj_success or bool(obj)
 
-    def _parse_object_pair_with_recovery(self) -> Tuple[bool, Optional[str], bool, Any]:
+    def _parse_object_pair_with_recovery(self) -> tuple[bool, Optional[str], bool, Any]:
         """Parse a key-value pair with recovery."""
         self.skip_whitespace_and_newlines()
 
@@ -597,7 +596,7 @@ class PartialParser:
 
         return key_success, key, value_success, value
 
-    def parse_array_with_recovery(self) -> Tuple[List[Any], bool]:
+    def parse_array_with_recovery(self) -> tuple[list[Any], bool]:
         """Parse an array with error recovery."""
         self.skip_whitespace_and_newlines()
 
@@ -613,7 +612,7 @@ class PartialParser:
         self.advance()
         self.skip_whitespace_and_newlines()
 
-        arr: List[Any] = []
+        arr: list[Any] = []
         arr_success = True
         element_index = 0
 
@@ -790,7 +789,7 @@ def parse_with_fallback(
     text: str,
     recovery_level: RecoveryLevel = RecoveryLevel.SKIP_FIELDS,
     config: Optional[ParseConfig] = None,
-) -> Tuple[Any, List[PartialParseError]]:
+) -> tuple[Any, list[PartialParseError]]:
     """
     Parse with recovery, returning data and errors as a tuple for convenience.
 

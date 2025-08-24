@@ -462,7 +462,7 @@ class TestPerformanceEdgeCases(unittest.TestCase):
 
             # Navigate to deep value
             current = result
-            for i in range(depth):
+            for _i in range(depth):
                 self.assertIn("level", current)
                 current = current["level"]
 

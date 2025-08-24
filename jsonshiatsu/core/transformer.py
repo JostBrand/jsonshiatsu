@@ -7,7 +7,8 @@ various malformed formats commonly found in real-world data.
 
 import re
 import signal
-from typing import Any, Callable, List, Match, Optional, Union
+from re import Match
+from typing import Any, Callable, Optional, Union
 
 
 class RegexTimeout(Exception):
@@ -54,7 +55,7 @@ def safe_regex_search(
 
 def safe_regex_findall(
     pattern: str, string: str, flags: int = 0, timeout: int = 5
-) -> List[str]:
+) -> list[str]:
     try:
         signal.signal(signal.SIGALRM, timeout_handler)
         signal.alarm(timeout)
@@ -340,17 +341,17 @@ class JSONPreprocessor:
             # Don't quote special JSON literal values
             # These should remain unquoted for later processing
             special_literals = ["NaN", "Infinity", "-Infinity", "undefined"]
-            if value in special_literals:
-                needs_quoting = False
-            elif value.lower() in ["true", "false", "null"]:
-                needs_quoting = False
-            elif (
-                value.replace(".", "")
-                .replace("-", "")
-                .replace("+", "")
-                .replace("e", "")
-                .replace("E", "")
-                .isdigit()
+            if (
+                value in special_literals
+                or value.lower() in ["true", "false", "null"]
+                or (
+                    value.replace(".", "")
+                    .replace("-", "")
+                    .replace("+", "")
+                    .replace("e", "")
+                    .replace("E", "")
+                    .isdigit()
+                )
             ):
                 needs_quoting = False
             else:
@@ -926,9 +927,8 @@ class JSONPreprocessor:
                 elif char == "}":
                     if stack and stack[-1] == "{":
                         stack.pop()
-                elif char == "]":
-                    if stack and stack[-1] == "[":
-                        stack.pop()
+                elif char == "]" and stack and stack[-1] == "[":
+                    stack.pop()
 
         # Close unclosed strings
         if in_string and string_char:

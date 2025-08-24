@@ -5,7 +5,8 @@ This module provides streaming capabilities for parsing large JSON documents
 without loading the entire content into memory.
 """
 
-from typing import Any, Dict, Iterator, List, TextIO
+from collections.abc import Iterator
+from typing import Any, TextIO
 
 from ..core.tokenizer import Position, Token, TokenType
 from ..core.transformer import JSONPreprocessor
@@ -73,7 +74,6 @@ class StreamingLexer:
 
 
 class StreamingParser:
-
     def __init__(self, config: ParseConfig):
         self.config = config
         from ..utils.config import ParseLimits
@@ -81,7 +81,6 @@ class StreamingParser:
         self.validator = LimitValidator(config.limits or ParseLimits())
 
     def parse_stream(self, stream: TextIO) -> Any:
-
         initial_chunk = stream.read(self.config.streaming_threshold // 10)
         stream.seek(0)
 
@@ -244,7 +243,7 @@ class StreamingTokenParser:
     """Parser that works with streaming tokens and enforces limits."""
 
     def __init__(
-        self, tokens: List[Token], config: ParseConfig, validator: LimitValidator
+        self, tokens: list[Token], config: ParseConfig, validator: LimitValidator
     ):
         self.tokens = tokens
         self.pos = 0
@@ -327,7 +326,7 @@ class StreamingTokenParser:
         else:
             self._raise_parse_error(f"Unexpected token: {token.type}", token.position)
 
-    def parse_object(self) -> Dict[str, Any]:
+    def parse_object(self) -> dict[str, Any]:
         """Parse object with size validation."""
         self.skip_whitespace_and_newlines()
 
@@ -338,7 +337,7 @@ class StreamingTokenParser:
         self.advance()
         self.skip_whitespace_and_newlines()
 
-        obj: Dict[str, Any] = {}
+        obj: dict[str, Any] = {}
         key_count = 0
 
         if self.current_token().type == TokenType.RBRACE:
@@ -405,7 +404,7 @@ class StreamingTokenParser:
 
         return obj
 
-    def parse_array(self) -> List[Any]:
+    def parse_array(self) -> list[Any]:
         """Parse array with size validation."""
         self.skip_whitespace_and_newlines()
 
@@ -416,7 +415,7 @@ class StreamingTokenParser:
         self.advance()
         self.skip_whitespace_and_newlines()
 
-        arr: List[Any] = []
+        arr: list[Any] = []
 
         if self.current_token().type == TokenType.RBRACKET:
             self.advance()

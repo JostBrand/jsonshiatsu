@@ -10,7 +10,6 @@ from .exceptions import SecurityError
 
 
 class LimitValidator:
-
     def __init__(self, limits: ParseLimits):
         self.limits = limits
         self.nesting_depth = 0

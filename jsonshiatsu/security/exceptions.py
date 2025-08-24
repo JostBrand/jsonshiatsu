@@ -5,7 +5,7 @@ This module provides detailed error information with position tracking and conte
 """
 
 from dataclasses import dataclass
-from typing import List, Optional
+from typing import Optional
 
 from ..core.tokenizer import Position
 
@@ -31,7 +31,7 @@ class jsonshiatsuError(Exception):
         message: str,
         position: Optional[Position] = None,
         context: Optional[ErrorContext] = None,
-        suggestions: Optional[List[str]] = None,
+        suggestions: Optional[list[str]] = None,
     ):
         self.message = message
         self.position = position
@@ -152,7 +152,7 @@ class ErrorReporter:
         return text_pos
 
     def create_parse_error(
-        self, message: str, position: Position, suggestions: Optional[List[str]] = None
+        self, message: str, position: Position, suggestions: Optional[list[str]] = None
     ) -> ParseError:
         """Create a parse error with full context."""
         context = self.create_context(position)
@@ -162,7 +162,7 @@ class ErrorReporter:
         self,
         message: str,
         position: Optional[Position] = None,
-        suggestions: Optional[List[str]] = None,
+        suggestions: Optional[list[str]] = None,
     ) -> SecurityError:
         """Create a security error with context if position is available."""
         context = None
@@ -177,7 +177,7 @@ class ErrorSuggestionEngine:
     @staticmethod
     def suggest_for_unexpected_token(
         token_value: str, expected: Optional[str] = None
-    ) -> List[str]:
+    ) -> list[str]:
         """Generate suggestions for unexpected token errors."""
         suggestions = []
 
@@ -204,7 +204,7 @@ class ErrorSuggestionEngine:
         return suggestions
 
     @staticmethod
-    def suggest_for_unclosed_structure(structure_type: str) -> List[str]:
+    def suggest_for_unclosed_structure(structure_type: str) -> list[str]:
         """Generate suggestions for unclosed structures."""
         suggestions = []
 
@@ -225,7 +225,7 @@ class ErrorSuggestionEngine:
         return suggestions
 
     @staticmethod
-    def suggest_for_invalid_value(value: str) -> List[str]:
+    def suggest_for_invalid_value(value: str) -> list[str]:
         """Generate suggestions for invalid values."""
         suggestions = []
 

@@ -219,10 +219,10 @@ class TestLoadCompatibility(unittest.TestCase):
     def test_basic_load_compatibility(self):
         """Test basic load() function compatibility."""
         # Test with standard JSON file
-        with open(self.temp_file.name, "r") as f:
+        with open(self.temp_file.name) as f:
             std_result = json.load(f)
 
-        with open(self.temp_file.name, "r") as f:
+        with open(self.temp_file.name) as f:
             flex_result = jsonshiatsu.load(f)
 
         self.assertEqual(std_result, flex_result)
@@ -237,10 +237,10 @@ class TestLoadCompatibility(unittest.TestCase):
                 obj["_loaded"] = True
             return obj
 
-        with open(self.temp_file.name, "r") as f:
+        with open(self.temp_file.name) as f:
             std_result = json.load(f, object_hook=add_marker)
 
-        with open(self.temp_file.name, "r") as f:
+        with open(self.temp_file.name) as f:
             flex_result = jsonshiatsu.load(f, object_hook=add_marker)
 
         self.assertEqual(std_result, flex_result)
@@ -250,12 +250,12 @@ class TestLoadCompatibility(unittest.TestCase):
     def test_load_malformed_json(self):
         """Test load() with malformed JSON (jsonshiatsu extension)."""
         # Standard json should fail
-        with open(self.malformed_file.name, "r") as f:
+        with open(self.malformed_file.name) as f:
             with self.assertRaises(json.JSONDecodeError):
                 json.load(f)
 
         # jsonshiatsu should handle it
-        with open(self.malformed_file.name, "r") as f:
+        with open(self.malformed_file.name) as f:
             flex_result = jsonshiatsu.load(f)
 
         self.assertIsInstance(flex_result, dict)

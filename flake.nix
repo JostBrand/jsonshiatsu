@@ -15,9 +15,7 @@
         pre-commit-check = pre-commit-hooks.lib.${system}.run {
           src = ./.;
           hooks = {
-            black.enable = true;
-            isort.enable = true;
-            flake8.enable = true;
+            ruff.enable = true;
             mypy.enable = true;
           };
         };
@@ -29,13 +27,9 @@
           wheel
           pytest
           pytest-cov
-          black
-          isort
-          flake8
-          autopep8
           mypy
+          ruff
           build
-          # Add core dependencies to avoid pip externally managed errors
         ]);
         
         devScripts = pkgs.writeScriptBin "dev-scripts" ''
@@ -54,14 +48,9 @@
               echo "Running integration tests..."
               PYTHONPATH="$(pwd):$PYTHONPATH" python -m pytest tests/integration/ -v
               ;;
-            "format")
-              echo "Formatting code..."
-              black jsonshiatsu/ tests/ examples/
-              isort jsonshiatsu/ tests/ examples/
-              ;;
             "lint")
               echo "Linting code..."
-              flake8 jsonshiatsu/ tests/ examples/
+              ruff jsonshiatsu/ tests/ examples/
               mypy jsonshiatsu/
               ;;
             "clean")
@@ -101,8 +90,8 @@
               echo "  test           - Run all tests with coverage"
               echo "  test-fast      - Run unit tests only"
               echo "  test-integration - Run integration tests only"
-              echo "  format         - Format code with black and isort"
-              echo "  lint           - Run linting with flake8 and mypy"
+              echo "  format         - Format code with ruff"
+              echo "  lint           - Run linting with ruff and mypy"
               echo "  clean          - Clean build artifacts"
               echo "  build          - Build the package"
               echo "  install-dev    - Install in development mode"
@@ -154,7 +143,7 @@
             echo "  dev-scripts install-dev    # Install jsonshiatsu in development mode"
             echo "  dev-scripts test-fast      # Run unit tests"
             echo "  dev-scripts test           # Run all tests with coverage"
-            echo "  dev-scripts format         # Format code with black and isort"
+            echo "  dev-scripts format         # Format code with ruff"
             echo "  dev-scripts lint           # Run linting"
             echo "  dev-scripts                # Show all available commands"
             echo ""
