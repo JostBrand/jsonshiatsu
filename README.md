@@ -33,13 +33,6 @@ Perfect for real-world scenarios where JSON may be improperly formatted, includi
 - **Unicode escape sequences**: `\u4F60\u597D` → proper Unicode characters
 - **Complex escape sequences**: All standard JSON escapes plus error recovery
 
-### Enterprise Features
-
-- **Security limits**: Configurable parsing limits for production use
-- **Streaming support**: Handle large JSON files efficiently
-- **Error recovery**: Extract valid data from partially broken JSON
-- **Production-ready**: Comprehensive test coverage and CI/CD
-
 ## Installation
 
 ```bash
@@ -97,26 +90,6 @@ config = ParseConfig(
     )
 )
 result = jsonshiatsu.parse(large_json, config=config)
-```
-
-### Security Limits
-
-Production applications can configure parsing limits:
-
-```python
-from jsonshiatsu import ParseLimits, ParseConfig
-
-limits = ParseLimits(
-    max_input_size=10*1024*1024,    # 10MB max input
-    max_string_length=1024*1024,    # 1MB max string
-    max_nesting_depth=100,          # 100 levels deep
-    max_object_keys=10000,          # 10K keys per object
-    max_array_items=100000,         # 100K array items
-    max_total_items=1000000         # 1M total items
-)
-
-config = ParseConfig(limits=limits, fallback=False)
-result = jsonshiatsu.parse(untrusted_json, config=config)
 ```
 
 ### Streaming Large Files
@@ -225,52 +198,10 @@ result = json.loads(complex_json)
 # Result: messages=["urgentimportant"], data=[1,None,3,None,5], etc.
 ```
 
-## Performance & Limitations
 
-### Performance Characteristics
-
-- **Valid JSON**: Comparable performance to standard `json` module
-- **Malformed JSON**: Additional preprocessing overhead (typically 2-5x slower)
-- **Large files**: Automatic streaming minimizes memory usage
-- **Complex patterns**: Performance scales with number of malformations
-
-### Current Limitations
+## Current Limitations
 
 - **Regex-based preprocessing**: Some complex edge cases may need manual handling
 - **Security consideration**: Aggressive preprocessing should only be used with trusted inputs
 - **Memory usage**: Complex malformed JSON requires additional processing memory
 - **Non-standard quotes**: Limited support for some exotic quote types
-
-### When to Use
-
-**Recommended for:**
-- LLM API responses with unpredictable formatting
-- Legacy system integration 
-- User-generated content parsing
-- Configuration files from various sources
-- MongoDB/database exports
-
-**Not recommended for:**
-- High-performance applications with guaranteed valid JSON
-- Security-critical applications with untrusted input (without proper limits)
-- Simple JSON where you control the format (use standard `json` module)
-
-### Error Recovery
-
-```python
-# Extract valid data even from partially broken JSON
-from jsonshiatsu.recovery import parse_partial, RecoveryLevel
-
-broken_json = """
-{
-    "valid_field": "works",
-    "broken_field": invalid_syntax_here,
-    "another_valid": 42
-}
-"""
-
-result = parse_partial(broken_json, RecoveryLevel.SKIP_FIELDS)
-print(result.data)          # {"valid_field": "works", "another_valid": 42}
-print(result.success_rate)  # 0.67 (2 out of 3 fields)
-```
-
