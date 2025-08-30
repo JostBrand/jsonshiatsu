@@ -243,10 +243,7 @@ class JavaScriptHandler:
     @staticmethod
     def _is_function_keyword(text: str, i: int) -> bool:
         """Check if position i starts with 'function' keyword."""
-        return (
-            text[i : i + 8] == "function"
-            and (i == 0 or not text[i - 1].isalnum())
-        )
+        return text[i : i + 8] == "function" and (i == 0 or not text[i - 1].isalnum())
 
     @staticmethod
     def _skip_function_definition(text: str, i: int) -> int:
@@ -289,7 +286,9 @@ class JavaScriptHandler:
         return j
 
     @staticmethod
-    def _skip_balanced_delimiters(text: str, j: int, open_char: str, close_char: str) -> int:
+    def _skip_balanced_delimiters(
+        text: str, j: int, open_char: str, close_char: str
+    ) -> int:
         """Skip balanced delimiters (parentheses or braces)."""
         if j >= len(text) or text[j] != open_char:
             return j

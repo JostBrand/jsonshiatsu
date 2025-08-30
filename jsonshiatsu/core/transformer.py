@@ -118,17 +118,17 @@ class JSONPreprocessor:
         """
         text = text.strip()
         parser_state = {
-            'brace_count': 0,
-            'bracket_count': 0,
-            'in_string': False,
-            'string_char': None,
-            'escaped': False,
-            'start_pos': -1
+            "brace_count": 0,
+            "bracket_count": 0,
+            "in_string": False,
+            "string_char": None,
+            "escaped": False,
+            "start_pos": -1,
         }
 
         for i, char in enumerate(text):
-            if parser_state['escaped']:
-                parser_state['escaped'] = False
+            if parser_state["escaped"]:
+                parser_state["escaped"] = False
                 continue
 
             if JSONPreprocessor._handle_escape_char(char, parser_state):
@@ -137,32 +137,32 @@ class JSONPreprocessor:
             if JSONPreprocessor._handle_string_state(char, parser_state):
                 continue
 
-            if not parser_state['in_string']:
+            if not parser_state["in_string"]:
                 JSONPreprocessor._handle_structure_chars(char, parser_state, i)
 
                 if JSONPreprocessor._is_complete_structure(parser_state):
-                    return text[parser_state['start_pos'] : i + 1]
+                    return text[parser_state["start_pos"] : i + 1]
 
         return text
 
     @staticmethod
     def _handle_escape_char(char: str, state: dict) -> bool:
         """Handle escape character in string."""
-        if char == "\\" and state['in_string']:
-            state['escaped'] = True
+        if char == "\\" and state["in_string"]:
+            state["escaped"] = True
             return True
         return False
 
     @staticmethod
     def _handle_string_state(char: str, state: dict) -> bool:
         """Handle string start and end."""
-        if char in ['"', "'"] and not state['in_string']:
-            state['in_string'] = True
-            state['string_char'] = char
+        if char in ['"', "'"] and not state["in_string"]:
+            state["in_string"] = True
+            state["string_char"] = char
             return True
-        if char == state['string_char'] and state['in_string']:
-            state['in_string'] = False
-            state['string_char'] = None
+        if char == state["string_char"] and state["in_string"]:
+            state["in_string"] = False
+            state["string_char"] = None
             return True
         return False
 
@@ -170,24 +170,24 @@ class JSONPreprocessor:
     def _handle_structure_chars(char: str, state: dict, i: int) -> None:
         """Handle structural characters outside strings."""
         if char in ["{", "["]:
-            if state['start_pos'] == -1:
-                state['start_pos'] = i
+            if state["start_pos"] == -1:
+                state["start_pos"] = i
             if char == "{":
-                state['brace_count'] += 1
+                state["brace_count"] += 1
             else:
-                state['bracket_count'] += 1
+                state["bracket_count"] += 1
         elif char == "}":
-            state['brace_count'] -= 1
+            state["brace_count"] -= 1
         elif char == "]":
-            state['bracket_count'] -= 1
+            state["bracket_count"] -= 1
 
     @staticmethod
     def _is_complete_structure(state: dict) -> bool:
         """Check if we have a complete JSON structure."""
         return bool(
-            state['start_pos'] != -1
-            and state['brace_count'] == 0
-            and state['bracket_count'] == 0
+            state["start_pos"] != -1
+            and state["brace_count"] == 0
+            and state["bracket_count"] == 0
         )
 
     @staticmethod
@@ -429,7 +429,9 @@ class JSONPreprocessor:
         char: str, in_string: bool, string_char: Optional[str]
     ) -> bool:
         """Check if character is a string boundary."""
-        return (char in ['"', "'"] and not in_string) or (char == string_char and in_string)
+        return (char in ['"', "'"] and not in_string) or (
+            char == string_char and in_string
+        )
 
     @staticmethod
     def _update_string_state(
@@ -447,7 +449,14 @@ class JSONPreprocessor:
         """Handle opening and closing brackets/braces."""
         if char in ["{", "["]:
             stack.append(char)
-        elif char == "}" and stack and stack[-1] == "{" or char == "]" and stack and stack[-1] == "[":
+        elif (
+            char == "}"
+            and stack
+            and stack[-1] == "{"
+            or char == "]"
+            and stack
+            and stack[-1] == "["
+        ):
             stack.pop()
 
     @staticmethod
@@ -532,9 +541,8 @@ class JSONPreprocessor:
             return False
 
         content = line[5:].strip()
-        return (
-            content.startswith(("{", "[", '"'))
-            and not any(keyword in line for keyword in ['"', "'", ":", "[", "]"])
+        return content.startswith(("{", "[", '"')) and not any(
+            keyword in line for keyword in ['"', "'", ":", "[", "]"]
         )
 
     @staticmethod
@@ -766,8 +774,14 @@ class JSONPreprocessor:
                         or safe_regex_search(
                             r"^[a-zA-Z_][a-zA-Z0-9_]*\s*:", next_stripped
                         )
-                        or (current_stripped.endswith("}") and next_stripped.startswith("{"))
-                        or (current_stripped.endswith("]") and next_stripped.startswith("["))
+                        or (
+                            current_stripped.endswith("}")
+                            and next_stripped.startswith("{")
+                        )
+                        or (
+                            current_stripped.endswith("]")
+                            and next_stripped.startswith("[")
+                        )
                     )
                 )
                 if needs_comma:
@@ -828,7 +842,9 @@ class JSONPreprocessor:
             before_comma = match.group(1)  # Character before comma
             bracket = match.group(2)  # Closing bracket
 
-            if JSONPreprocessor._should_preserve_regex_quantifier(match, text, before_comma, bracket):
+            if JSONPreprocessor._should_preserve_regex_quantifier(
+                match, text, before_comma, bracket
+            ):
                 return match.group(0)
 
             if JSONPreprocessor._should_preserve_sparse_array(before_comma, bracket):

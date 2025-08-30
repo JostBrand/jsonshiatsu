@@ -149,19 +149,19 @@ class StringPreprocessor:
     def _should_skip_quote_fixing(text: str) -> bool:
         """Check if text should be skipped for quote fixing."""
         # Early checks for simple conditions
-        if (len(text) > 50000 or
-            "://" in text or
-            '\\"' in text):
+        if len(text) > 50000 or "://" in text or '\\"' in text:
             return True
 
         # Check for structural issues
         open_braces = text.count("{") - text.count("}")
         open_brackets = text.count("[") - text.count("]")
-        if (open_braces > 0 or
-            open_brackets > 0 or
-            safe_regex_search(r'"\s*=\s*[^=]|^\s*\w+\s*=\s*', text) or
-            safe_regex_search(r'"\s+"[^:]', text) or
-            safe_regex_search(r"\}\s*\{", text)):
+        if (
+            open_braces > 0
+            or open_brackets > 0
+            or safe_regex_search(r'"\s*=\s*[^=]|^\s*\w+\s*=\s*', text)
+            or safe_regex_search(r'"\s+"[^:]', text)
+            or safe_regex_search(r"\}\s*\{", text)
+        ):
             return True
 
         # Don't process well-formed JSON
@@ -253,8 +253,9 @@ class StringPreprocessor:
                 if text[i] == '"':
                     # Start of a string - find its actual end
                     result.append('"')
-                    string_content, next_pos = StringPreprocessor._process_string_content(
-                        text, i + 1)
+                    string_content, next_pos = (
+                        StringPreprocessor._process_string_content(text, i + 1)
+                    )
                     result.append(string_content)
                     if next_pos < len(text) or string_content:
                         result.append('"')
@@ -391,7 +392,9 @@ class StringPreprocessor:
             quote_count = StringPreprocessor._count_unescaped_quotes(line)
 
             if quote_count % 2 == 1 and i < len(lines) - 1:
-                combined_line, next_i = StringPreprocessor._combine_multiline_string(lines, i)
+                combined_line, next_i = StringPreprocessor._combine_multiline_string(
+                    lines, i
+                )
                 fixed_lines.append(combined_line)
                 i = next_i
             else:

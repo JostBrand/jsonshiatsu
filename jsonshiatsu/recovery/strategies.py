@@ -49,23 +49,29 @@ class ErrorSeverity(Enum):
 @dataclass
 class ErrorLocation:
     """Location information for parsing errors."""
+
     path: str = ""  # JSONPath to error location
     line: int = 0  # Line number
     column: int = 0  # Column number
 
+
 @dataclass
 class ErrorContext:
     """Context information for parsing errors."""
+
     context_before: str = ""  # Text before error
     context_after: str = ""  # Text after error
+
 
 @dataclass
 class RecoveryInfo:
     """Information about recovery attempts."""
+
     recovery_attempted: bool = False
     recovery_action: Optional[RecoveryAction] = None
     original_value: str = ""  # Original malformed content
     recovered_value: Any = None  # What was recovered (if any)
+
 
 class PartialParseError:
     """Detailed error information for partial parsing."""
@@ -76,7 +82,7 @@ class PartialParseError:
         message: str = "",
         suggestion: str = "",
         severity: ErrorSeverity = ErrorSeverity.ERROR,
-        **kwargs: Any  # Backward compatibility arguments
+        **kwargs: Any,  # Backward compatibility arguments
     ):
         self.error_type = error_type
         self.message = message
@@ -92,28 +98,28 @@ class PartialParseError:
     def _init_from_kwargs(self, kwargs: dict[str, Any]) -> None:
         """Initialize from keyword arguments for backward compatibility."""
         # Location args
-        if 'path' in kwargs:
-            self.location.path = kwargs['path']
-        if 'line' in kwargs:
-            self.location.line = kwargs['line']
-        if 'column' in kwargs:
-            self.location.column = kwargs['column']
+        if "path" in kwargs:
+            self.location.path = kwargs["path"]
+        if "line" in kwargs:
+            self.location.line = kwargs["line"]
+        if "column" in kwargs:
+            self.location.column = kwargs["column"]
 
         # Context args
-        if 'context_before' in kwargs:
-            self.context.context_before = kwargs['context_before']
-        if 'context_after' in kwargs:
-            self.context.context_after = kwargs['context_after']
+        if "context_before" in kwargs:
+            self.context.context_before = kwargs["context_before"]
+        if "context_after" in kwargs:
+            self.context.context_after = kwargs["context_after"]
 
         # Recovery args
-        if 'recovery_attempted' in kwargs:
-            self.recovery.recovery_attempted = kwargs['recovery_attempted']
-        if 'recovery_action' in kwargs:
-            self.recovery.recovery_action = kwargs['recovery_action']
-        if 'original_value' in kwargs:
-            self.recovery.original_value = kwargs['original_value']
-        if 'recovered_value' in kwargs:
-            self.recovery.recovered_value = kwargs['recovered_value']
+        if "recovery_attempted" in kwargs:
+            self.recovery.recovery_attempted = kwargs["recovery_attempted"]
+        if "recovery_action" in kwargs:
+            self.recovery.recovery_action = kwargs["recovery_action"]
+        if "original_value" in kwargs:
+            self.recovery.original_value = kwargs["original_value"]
+        if "recovered_value" in kwargs:
+            self.recovery.recovered_value = kwargs["recovered_value"]
 
     # Backward compatibility properties
     @property
@@ -241,14 +247,17 @@ class PartialParseResult:
 @dataclass
 class ParserState:
     """Current state of the parser."""
+
     pos: int = 0
     current_path: list[str] = field(default_factory=list)
     in_recovery_mode: bool = False
     recovery_depth: int = 0
 
+
 @dataclass
 class ParserConfig:
     """Parser configuration and dependencies."""
+
     tokens: list[Token] = field(default_factory=list)
     config: Optional[ParseConfig] = None
     recovery_level: RecoveryLevel = RecoveryLevel.SKIP_FIELDS
@@ -269,7 +278,7 @@ class PartialParser:
             tokens=tokens,
             config=config,
             recovery_level=recovery_level,
-            validator=LimitValidator(config.limits) if config.limits else None
+            validator=LimitValidator(config.limits) if config.limits else None,
         )
         self.state = ParserState()
         self.result = PartialParseResult()
