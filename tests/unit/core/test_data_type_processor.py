@@ -137,8 +137,8 @@ class TestDataTypeProcessor(unittest.TestCase):
 
     def test_handle_empty_values_array_commas(self) -> None:
         """Test handling empty values in arrays."""
-        input_text = '[1, 2, , 4, , 6]'
-        expected = '[1, 2, null, 4, null, 6]'
+        input_text = "[1, 2, , 4, , 6]"
+        expected = "[1, 2, null, 4, null, 6]"
         result = DataTypeProcessor.handle_empty_values(input_text)
         self.assertEqual(result, expected)
 
@@ -217,7 +217,7 @@ class TestDataTypeProcessor(unittest.TestCase):
 
     def test_complex_nested_structures(self) -> None:
         """Test processing of complex nested structures."""
-        input_text = '''
+        input_text = """
         {
             "config": {
                 "enabled": True,
@@ -235,7 +235,7 @@ class TestDataTypeProcessor(unittest.TestCase):
                 }
             }
         }
-        '''
+        """
 
         # Apply all processors
         result = DataTypeProcessor.normalize_boolean_null(input_text)
@@ -247,7 +247,7 @@ class TestDataTypeProcessor(unittest.TestCase):
         self.assertIn('"enabled": true', result)
         self.assertIn('"timeout": 30', result)  # 0x1E = 30
         self.assertIn('"version": "2.1.0.3"', result)
-        self.assertIn('null', result)  # Empty values filled
+        self.assertIn("null", result)  # Empty values filled
         self.assertIn('"max": 1000', result)  # Plus prefix removed
         self.assertIn('"special": "NaN"', result)  # NaN quoted
 

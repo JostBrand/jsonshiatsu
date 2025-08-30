@@ -25,8 +25,8 @@ class TestArrayObjectHandler(unittest.TestCase):
 
     def test_fix_structural_syntax_sets_to_arrays(self) -> None:
         """Test converting set literals to arrays."""
-        input_text = '{1, 2, 3, 4}'
-        expected = '[1, 2, 3, 4]'
+        input_text = "{1, 2, 3, 4}"
+        expected = "[1, 2, 3, 4]"
         result = ArrayObjectHandler.fix_structural_syntax(input_text)
         self.assertEqual(result, expected)
 
@@ -52,22 +52,22 @@ class TestArrayObjectHandler(unittest.TestCase):
 
     def test_handle_sparse_arrays_basic_sparse(self) -> None:
         """Test handling basic sparse array elements."""
-        input_text = '[1, , 3, , 5]'
-        expected = '[1, null, 3, null, 5]'
+        input_text = "[1, , 3, , 5]"
+        expected = "[1, null, 3, null, 5]"
         result = ArrayObjectHandler.handle_sparse_arrays(input_text)
         self.assertEqual(result, expected)
 
     def test_handle_sparse_arrays_leading_sparse(self) -> None:
         """Test handling leading sparse elements in arrays."""
-        input_text = '[, 2, 3]'
-        expected = '[null, 2, 3]'
+        input_text = "[, 2, 3]"
+        expected = "[null, 2, 3]"
         result = ArrayObjectHandler.handle_sparse_arrays(input_text)
         self.assertEqual(result, expected)
 
     def test_handle_sparse_arrays_multiple_consecutive(self) -> None:
         """Test handling multiple consecutive sparse elements."""
-        input_text = '[1, , , 4]'
-        expected = '[1, null, null, 4]'
+        input_text = "[1, , , 4]"
+        expected = "[1, null, null, 4]"
         result = ArrayObjectHandler.handle_sparse_arrays(input_text)
         self.assertEqual(result, expected)
 
@@ -100,7 +100,7 @@ class TestArrayObjectHandler(unittest.TestCase):
 
     def test_handle_sparse_arrays_no_changes_needed(self) -> None:
         """Test that well-formed arrays are not changed."""
-        input_text = '[1, 2, 3, 4, 5]'
+        input_text = "[1, 2, 3, 4, 5]"
         result = ArrayObjectHandler.handle_sparse_arrays(input_text)
         self.assertEqual(result, input_text)
 
@@ -155,21 +155,21 @@ class TestArrayObjectHandler(unittest.TestCase):
 
         # Verify transformations worked - be more flexible with exact format
         # The parentheses might not convert to braces if it doesn't look like an object
-        self.assertTrue('"key"' in result)   # Key should be there
-        self.assertIn('[1, 2', result)       # Set converted to array
-        self.assertIn('null', result)        # Sparse elements filled
-        self.assertIn('"value"', result)     # String closed
+        self.assertTrue('"key"' in result)  # Key should be there
+        self.assertIn("[1, 2", result)  # Set converted to array
+        self.assertIn("null", result)  # Sparse elements filled
+        self.assertIn('"value"', result)  # String closed
 
     def test_edge_cases_empty_structures(self) -> None:
         """Test handling of empty structures."""
-        input_text = '[] {} (, )'
+        input_text = "[] {} (, )"
         result = ArrayObjectHandler.fix_structural_syntax(input_text)
         result = ArrayObjectHandler.handle_sparse_arrays(result)
         result = ArrayObjectHandler.fix_unclosed_strings(result)
 
         # Should handle empty structures gracefully
-        self.assertIn('[]', result)
-        self.assertIn('{}', result)
+        self.assertIn("[]", result)
+        self.assertIn("{}", result)
 
     def test_edge_cases_deeply_nested(self) -> None:
         """Test deeply nested array/object structures."""
@@ -211,12 +211,12 @@ class TestArrayObjectHandler(unittest.TestCase):
 
     def test_complex_real_world_scenario(self) -> None:
         """Test a complex real-world-like scenario."""
-        input_text = '''
+        input_text = """
         ("config": {
             "servers": {1, 2, ,},
             "options": [, "enabled", , "debug"
         })
-        '''
+        """
 
         # Apply all processors
         result = ArrayObjectHandler.fix_structural_syntax(input_text)
@@ -224,25 +224,25 @@ class TestArrayObjectHandler(unittest.TestCase):
         result = ArrayObjectHandler.fix_unclosed_strings(result)
 
         # Verify major transformations
-        self.assertIn('{"config":', result)       # Parentheses converted
+        self.assertIn('{"config":', result)  # Parentheses converted
         self.assertIn('"servers": [1, 2', result)  # Set converted
-        self.assertIn('null', result)             # Sparse elements filled
-        self.assertIn('"debug"', result)          # Unclosed string fixed
+        self.assertIn("null", result)  # Sparse elements filled
+        self.assertIn('"debug"', result)  # Unclosed string fixed
 
     def test_performance_protection_large_structures(self) -> None:
         """Test that large structures are handled without issues."""
         # Create a reasonably large structure to test performance
-        large_array = '[' + ', '.join(f'"{i}"' for i in range(100)) + ', , "end"]'
+        large_array = "[" + ", ".join(f'"{i}"' for i in range(100)) + ', , "end"]'
         result = ArrayObjectHandler.handle_sparse_arrays(large_array)
-        self.assertIn('null', result)
+        self.assertIn("null", result)
         self.assertIn('"end"', result)
 
     def test_edge_case_only_commas(self) -> None:
         """Test edge case with only commas."""
-        input_text = '[, , ,]'
+        input_text = "[, , ,]"
         result = ArrayObjectHandler.handle_sparse_arrays(input_text)
         # Accept either with or without trailing comma
-        self.assertIn(result, ['[null, null, null,]', '[null, null, null]'])
+        self.assertIn(result, ["[null, null, null,]", "[null, null, null]"])
 
 
 if __name__ == "__main__":

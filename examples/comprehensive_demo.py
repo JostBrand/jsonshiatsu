@@ -55,7 +55,6 @@ except ImportError:
     HAS_RECOVERY = False
 
 
-
 def print_section(title: str, subtitle: str = "") -> None:
     """Print a formatted section header."""
     print(f"\n{'=' * 80}")

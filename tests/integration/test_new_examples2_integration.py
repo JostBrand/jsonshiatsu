@@ -131,12 +131,12 @@ class TestNewExamples2Integration:
                 "endpoints": {
                     "api": "https://api.example.com",
                     "auth": "https://auth.example.com",
-                    "backup": "https://backup.example.com"
-                }
+                    "backup": "https://backup.example.com",
+                },
             },
             "features": ["feature1", "feature2"],
             "version": "1.2.3",
-            "description": "This is a test\nconfiguration file"
+            "description": "This is a test\nconfiguration file",
         }
         result = json.loads(malformed)
         assert result == expected, f"Expected {expected}, got {result}"

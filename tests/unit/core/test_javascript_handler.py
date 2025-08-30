@@ -32,7 +32,9 @@ class TestJavaScriptHandler(unittest.TestCase):
 
     def test_remove_comments_multiline_block(self) -> None:
         """Test removing multiline block comments."""
-        input_text = '{"key": "value", /* this is a\n multiline comment */ "key2": "value2"}'
+        input_text = (
+            '{"key": "value", /* this is a\n multiline comment */ "key2": "value2"}'
+        )
         expected = '{"key": "value",  "key2": "value2"}'
         result = JavaScriptHandler.remove_comments(input_text)
         self.assertEqual(result, expected)
@@ -60,8 +62,8 @@ class TestJavaScriptHandler(unittest.TestCase):
 
     def test_unwrap_function_calls_let_declaration(self) -> None:
         """Test unwrapping let variable declarations."""
-        input_text = 'let result = [1, 2, 3];'
-        expected = '[1, 2, 3]'
+        input_text = "let result = [1, 2, 3];"
+        expected = "[1, 2, 3]"
         result = JavaScriptHandler.unwrap_function_calls(input_text)
         self.assertEqual(result, expected)
 
@@ -88,8 +90,8 @@ class TestJavaScriptHandler(unittest.TestCase):
     def test_unwrap_inline_function_calls_simple(self) -> None:
         """Test unwrapping simple inline function calls."""
         # parseInt is not handled by this method - it focuses on MongoDB-style functions
-        input_text = 'parseInt(123)'
-        expected = 'parseInt(123)'  # Should remain unchanged
+        input_text = "parseInt(123)"
+        expected = "parseInt(123)"  # Should remain unchanged
         result = JavaScriptHandler.unwrap_inline_function_calls(input_text)
         self.assertEqual(result, expected)
 
@@ -208,7 +210,7 @@ class TestJavaScriptHandler(unittest.TestCase):
     def test_integration_multiple_javascript_features(self) -> None:
         """Test integration of multiple JavaScript preprocessing features."""
         # Complex case with comments, function calls, and expressions
-        input_text = '''
+        input_text = """
         // This is a comment
         return {
             "result": 10 + 5,
@@ -216,7 +218,7 @@ class TestJavaScriptHandler(unittest.TestCase):
             "pattern": /test/g,
             "template": `hello world`
         };
-        '''
+        """
 
         # Apply all JavaScript preprocessing
         result = JavaScriptHandler.remove_comments(input_text)
@@ -229,8 +231,8 @@ class TestJavaScriptHandler(unittest.TestCase):
         self.assertIn('"comparison": true', result)  # Comparison processed
         self.assertIn('"pattern": "test"', result)  # Regex converted
         self.assertIn('"template": "hello world"', result)  # Template literal converted
-        self.assertNotIn('//', result)  # Comments removed
-        self.assertNotIn('return', result)  # Function wrapper removed
+        self.assertNotIn("//", result)  # Comments removed
+        self.assertNotIn("return", result)  # Function wrapper removed
 
     def test_edge_cases_empty_input(self) -> None:
         """Test handling of empty input."""
