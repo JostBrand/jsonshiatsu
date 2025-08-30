@@ -4,6 +4,7 @@ jsonshiatsu Error Recovery System.
 This module provides partial error parsing and recovery capabilities.
 """
 
+from . import _exports
 from .strategies import (
     ErrorSeverity,
     PartialParseError,
@@ -20,10 +21,11 @@ __all__ = [
     "parse_partial",
     "extract_valid_data",
     "parse_with_fallback",
-    "RecoveryLevel",
-    "RecoveryAction",
-    "ErrorSeverity",
-    "PartialParseResult",
-    "PartialParseError",
+    *_exports.RECOVERY_EXPORTS,
     "PartialParser",
+    "ErrorSeverity",
+    "PartialParseError",
+    "PartialParseResult",
+    "RecoveryAction",
+    "RecoveryLevel",
 ]

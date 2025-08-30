@@ -34,6 +34,9 @@ Quick Start:
     result = parse_partial(malformed_json, RecoveryLevel.SKIP_FIELDS)
 """
 
+# Import additional attributes from standard json module for full compatibility
+import json as _json
+
 from .core.engine import (
     JSONDecodeError,
     JSONDecoder,
@@ -61,16 +64,13 @@ from .utils.config import ParseConfig, ParseLimits, PreprocessingConfig
 __version__ = "0.1.0"
 __author__ = "jsonshiatsu contributors"
 
-# Import additional attributes from standard json module for full compatibility
-import json as _json
-
 # Import standard json module attributes for compatibility
 try:
-    _json_version = getattr(_json, "__version__", "2.0.9")
-    _json_author = getattr(_json, "__author__", "Bob Ippolito <bob@redivi.com>")
+    _JSON_VERSION = getattr(_json, "__version__", "2.0.9")
+    _JSON_AUTHOR = getattr(_json, "__author__", "Bob Ippolito <bob@redivi.com>")
 except AttributeError:
-    _json_version = "2.0.9"
-    _json_author = "Bob Ippolito <bob@redivi.com>"
+    _JSON_VERSION = "2.0.9"
+    _JSON_AUTHOR = "Bob Ippolito <bob@redivi.com>"
 
 # Add module attributes that mypy expects
 __version__ = "0.1.0"
@@ -98,6 +98,7 @@ __all__ = [
     "SecurityError",
     # Advanced classes
     "StreamingParser",
+    # Recovery exports
     "RecoveryLevel",
     "RecoveryAction",
     "ErrorSeverity",

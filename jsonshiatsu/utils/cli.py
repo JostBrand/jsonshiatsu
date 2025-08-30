@@ -66,8 +66,14 @@ Examples:
     except ParseError as e:
         print(f"Parse error: {e}", file=sys.stderr)
         sys.exit(1)
-    except Exception as e:
-        print(f"Error: {e}", file=sys.stderr)
+    except OSError as e:
+        print(f"File I/O error: {e}", file=sys.stderr)
+        sys.exit(1)
+    except (TypeError, ValueError) as e:
+        print(f"JSON formatting error: {e}", file=sys.stderr)
+        sys.exit(1)
+    except KeyboardInterrupt:
+        print("Interrupted by user", file=sys.stderr)
         sys.exit(1)
     finally:
         if args.file != sys.stdin:

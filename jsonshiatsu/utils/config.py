@@ -52,6 +52,7 @@ class PreprocessingConfig:
 
     @classmethod
     def conservative(cls) -> "PreprocessingConfig":
+        """Create a conservative preprocessing configuration."""
         return cls(
             fix_unescaped_strings=False,
             handle_incomplete_json=False,
@@ -60,12 +61,15 @@ class PreprocessingConfig:
 
     @classmethod
     def aggressive(cls) -> "PreprocessingConfig":
+        """Create an aggressive preprocessing configuration."""
         return cls()
 
     @classmethod
     def from_features(cls, enabled_features: set[str]) -> "PreprocessingConfig":
+        """Create configuration from a set of enabled feature names."""
         config = cls()
-        for field in config.__dataclass_fields__:
+
+        for field in config.__dataclass_fields__:  # pylint: disable=no-member
             setattr(config, field, field in enabled_features)
         return config
 
@@ -86,9 +90,11 @@ class ParseConfig:
     max_error_context: int = 50
 
     streaming_threshold: int = 1024 * 1024
+    _original_text: Optional[str] = None
 
     def __init__(
         self,
+        *,
         limits: Optional[ParseLimits] = None,
         fallback: bool = True,
         duplicate_keys: bool = False,
@@ -103,6 +109,7 @@ class ParseConfig:
         self.fallback = fallback
         self.duplicate_keys = duplicate_keys
         self.aggressive = aggressive
+        self._original_text = None
 
         if preprocessing_config is not None:
             self.preprocessing_config = preprocessing_config

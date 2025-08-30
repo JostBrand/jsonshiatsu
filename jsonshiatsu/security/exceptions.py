@@ -23,7 +23,7 @@ class ErrorContext:
     column_indicator: str  # Visual indicator of error column
 
 
-class jsonshiatsuError(Exception):
+class JSONShiatsuError(Exception):
     """Base exception for jsonshiatsu with enhanced error reporting."""
 
     def __init__(
@@ -71,22 +71,16 @@ class jsonshiatsuError(Exception):
         return "\n".join(lines)
 
 
-class ParseError(jsonshiatsuError):
+class ParseError(JSONShiatsuError):
     """Enhanced parse error with position and context."""
 
-    pass
 
-
-class SecurityError(jsonshiatsuError):
+class SecurityError(JSONShiatsuError):
     """Security limit exceeded error."""
 
-    pass
 
-
-class JSONDecodeError(jsonshiatsuError):
+class JSONDecodeError(JSONShiatsuError):
     """JSON decode error for compatibility with standard json module."""
-
-    pass
 
 
 class ErrorReporter:

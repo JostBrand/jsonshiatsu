@@ -10,6 +10,7 @@ from enum import Enum
 from typing import Any, Optional
 
 from ..core.tokenizer import Lexer, Position, Token, TokenType
+from ..core.transformer import JSONPreprocessor
 from ..security.exceptions import ErrorReporter
 from ..security.limits import LimitValidator
 from ..utils.config import ParseConfig
@@ -46,22 +47,164 @@ class ErrorSeverity(Enum):
 
 
 @dataclass
-class PartialParseError:
-    """Detailed error information for partial parsing."""
-
+class ErrorLocation:
+    """Location information for parsing errors."""
     path: str = ""  # JSONPath to error location
     line: int = 0  # Line number
     column: int = 0  # Column number
-    error_type: str = ""  # Category of error
-    message: str = ""  # Human-readable description
-    suggestion: str = ""  # How to fix it
+
+@dataclass
+class ErrorContext:
+    """Context information for parsing errors."""
     context_before: str = ""  # Text before error
     context_after: str = ""  # Text after error
-    severity: ErrorSeverity = ErrorSeverity.ERROR
+
+@dataclass
+class RecoveryInfo:
+    """Information about recovery attempts."""
     recovery_attempted: bool = False
     recovery_action: Optional[RecoveryAction] = None
     original_value: str = ""  # Original malformed content
     recovered_value: Any = None  # What was recovered (if any)
+
+class PartialParseError:
+    """Detailed error information for partial parsing."""
+
+    def __init__(
+        self,
+        error_type: str = "",
+        message: str = "",
+        suggestion: str = "",
+        severity: ErrorSeverity = ErrorSeverity.ERROR,
+        **kwargs: Any  # Backward compatibility arguments
+    ):
+        self.error_type = error_type
+        self.message = message
+        self.suggestion = suggestion
+        self.severity = severity
+        self.location = ErrorLocation()
+        self.context = ErrorContext()
+        self.recovery = RecoveryInfo()
+
+        # Handle backward compatibility args
+        self._init_from_kwargs(kwargs)
+
+    def _init_from_kwargs(self, kwargs: dict[str, Any]) -> None:
+        """Initialize from keyword arguments for backward compatibility."""
+        # Location args
+        if 'path' in kwargs:
+            self.location.path = kwargs['path']
+        if 'line' in kwargs:
+            self.location.line = kwargs['line']
+        if 'column' in kwargs:
+            self.location.column = kwargs['column']
+
+        # Context args
+        if 'context_before' in kwargs:
+            self.context.context_before = kwargs['context_before']
+        if 'context_after' in kwargs:
+            self.context.context_after = kwargs['context_after']
+
+        # Recovery args
+        if 'recovery_attempted' in kwargs:
+            self.recovery.recovery_attempted = kwargs['recovery_attempted']
+        if 'recovery_action' in kwargs:
+            self.recovery.recovery_action = kwargs['recovery_action']
+        if 'original_value' in kwargs:
+            self.recovery.original_value = kwargs['original_value']
+        if 'recovered_value' in kwargs:
+            self.recovery.recovered_value = kwargs['recovered_value']
+
+    # Backward compatibility properties
+    @property
+    def path(self) -> str:
+        """Get JSONPath to error location."""
+        return self.location.path
+
+    @path.setter
+    def path(self, value: str) -> None:
+        """Set JSONPath to error location."""
+        self.location.path = value
+
+    @property
+    def line(self) -> int:
+        """Get line number of error."""
+        return self.location.line
+
+    @line.setter
+    def line(self, value: int) -> None:
+        """Set line number of error."""
+        self.location.line = value
+
+    @property
+    def column(self) -> int:
+        """Get column number of error."""
+        return self.location.column
+
+    @column.setter
+    def column(self, value: int) -> None:
+        """Set column number of error."""
+        self.location.column = value
+
+    @property
+    def context_before(self) -> str:
+        """Get text before error."""
+        return self.context.context_before
+
+    @context_before.setter
+    def context_before(self, value: str) -> None:
+        """Set text before error."""
+        self.context.context_before = value
+
+    @property
+    def context_after(self) -> str:
+        """Get text after error."""
+        return self.context.context_after
+
+    @context_after.setter
+    def context_after(self, value: str) -> None:
+        """Set text after error."""
+        self.context.context_after = value
+
+    @property
+    def recovery_attempted(self) -> bool:
+        """Get whether recovery was attempted."""
+        return self.recovery.recovery_attempted
+
+    @recovery_attempted.setter
+    def recovery_attempted(self, value: bool) -> None:
+        """Set whether recovery was attempted."""
+        self.recovery.recovery_attempted = value
+
+    @property
+    def recovery_action(self) -> Optional[RecoveryAction]:
+        """Get recovery action taken."""
+        return self.recovery.recovery_action
+
+    @recovery_action.setter
+    def recovery_action(self, value: Optional[RecoveryAction]) -> None:
+        """Set recovery action taken."""
+        self.recovery.recovery_action = value
+
+    @property
+    def original_value(self) -> str:
+        """Get original malformed content."""
+        return self.recovery.original_value
+
+    @original_value.setter
+    def original_value(self, value: str) -> None:
+        """Set original malformed content."""
+        self.recovery.original_value = value
+
+    @property
+    def recovered_value(self) -> Any:
+        """Get recovered value."""
+        return self.recovery.recovered_value
+
+    @recovered_value.setter
+    def recovered_value(self, value: Any) -> None:
+        """Set recovered value."""
+        self.recovery.recovered_value = value
 
 
 @dataclass
@@ -95,6 +238,24 @@ class PartialParseResult:
         return self.success_rate
 
 
+@dataclass
+class ParserState:
+    """Current state of the parser."""
+    pos: int = 0
+    current_path: list[str] = field(default_factory=list)
+    in_recovery_mode: bool = False
+    recovery_depth: int = 0
+
+@dataclass
+class ParserConfig:
+    """Parser configuration and dependencies."""
+    tokens: list[Token] = field(default_factory=list)
+    config: Optional[ParseConfig] = None
+    recovery_level: RecoveryLevel = RecoveryLevel.SKIP_FIELDS
+    validator: Optional[LimitValidator] = None
+    error_reporter: Optional[ErrorReporter] = None
+
+
 class PartialParser:
     """Parser that can recover from errors and extract partial data."""
 
@@ -104,23 +265,89 @@ class PartialParser:
         config: ParseConfig,
         recovery_level: RecoveryLevel = RecoveryLevel.SKIP_FIELDS,
     ):
-        self.tokens = tokens
-        self.tokens_length = len(tokens)
-        self.pos = 0
-        self.config = config
-        self.recovery_level = recovery_level
-        self.validator = LimitValidator(config.limits) if config.limits else None
-
-        self.current_path: list[str] = []
+        self.parser_config = ParserConfig(
+            tokens=tokens,
+            config=config,
+            recovery_level=recovery_level,
+            validator=LimitValidator(config.limits) if config.limits else None
+        )
+        self.state = ParserState()
         self.result = PartialParseResult()
-        self.error_reporter: Optional[ErrorReporter] = None
 
-        self.in_recovery_mode = False
-        self.recovery_depth = 0
+    # Properties for backward compatibility
+    @property
+    def tokens(self) -> list[Token]:
+        """Get token list."""
+        return self.parser_config.tokens
+
+    @property
+    def tokens_length(self) -> int:
+        """Get token list length."""
+        return len(self.parser_config.tokens)
+
+    @property
+    def pos(self) -> int:
+        """Get current position."""
+        return self.state.pos
+
+    @pos.setter
+    def pos(self, value: int) -> None:
+        """Set current position."""
+        self.state.pos = value
+
+    @property
+    def config(self) -> ParseConfig:
+        """Get parse configuration."""
+        return self.parser_config.config  # type: ignore
+
+    @property
+    def recovery_level(self) -> RecoveryLevel:
+        """Get recovery level."""
+        return self.parser_config.recovery_level
+
+    @property
+    def validator(self) -> Optional[LimitValidator]:
+        """Get limit validator."""
+        return self.parser_config.validator
+
+    @property
+    def current_path(self) -> list[str]:
+        """Get current JSONPath."""
+        return self.state.current_path
+
+    @current_path.setter
+    def current_path(self, value: list[str]) -> None:
+        """Set current JSONPath."""
+        self.state.current_path = value
+
+    @property
+    def error_reporter(self) -> Optional[ErrorReporter]:
+        """Get error reporter."""
+        return self.parser_config.error_reporter
+
+    @property
+    def in_recovery_mode(self) -> bool:
+        """Get recovery mode status."""
+        return self.state.in_recovery_mode
+
+    @in_recovery_mode.setter
+    def in_recovery_mode(self, value: bool) -> None:
+        """Set recovery mode status."""
+        self.state.in_recovery_mode = value
+
+    @property
+    def recovery_depth(self) -> int:
+        """Get recovery depth."""
+        return self.state.recovery_depth
+
+    @recovery_depth.setter
+    def recovery_depth(self, value: int) -> None:
+        """Set recovery depth."""
+        self.state.recovery_depth = value
 
     def set_error_reporter(self, error_reporter: ErrorReporter) -> None:
         """Set error reporter for enhanced error information."""
-        self.error_reporter = error_reporter
+        self.parser_config.error_reporter = error_reporter
 
     def current_token(self) -> Optional[Token]:
         """Get current token safely."""
@@ -183,16 +410,17 @@ class PartialParser:
         if self.recovery_level == RecoveryLevel.STRICT:
             return False, None
 
-        if error.error_type == "missing_quotes":
-            return self._recover_missing_quotes(error)
-        elif error.error_type == "trailing_comma":
-            return self._recover_trailing_comma(error)
-        elif error.error_type == "missing_colon":
-            return self._recover_missing_colon(error)
-        elif error.error_type == "unclosed_string":
-            return self._recover_unclosed_string(error)
-        elif error.error_type == "invalid_value":
-            return self._recover_invalid_value(error)
+        recovery_map = {
+            "missing_quotes": self._recover_missing_quotes,
+            "trailing_comma": self._recover_trailing_comma,
+            "missing_colon": self._recover_missing_colon,
+            "unclosed_string": self._recover_unclosed_string,
+            "invalid_value": self._recover_invalid_value,
+        }
+
+        recovery_func = recovery_map.get(error.error_type)
+        if recovery_func:
+            return recovery_func(error)
 
         return False, None
 
@@ -317,91 +545,101 @@ class PartialParser:
         self.result.total_fields += 1
 
         try:
-            if token.type == TokenType.STRING:
-                if self.validator:
-                    self.validator.validate_string_length(token.value)
-                self.advance()
-                self.result.successful_fields += 1
-                return token.value, True
-
-            elif token.type == TokenType.NUMBER:
-                if self.validator:
-                    self.validator.validate_number_length(token.value)
-                self.advance()
-                value = token.value
-                try:
-                    if "." in value or "e" in value.lower():
-                        result = float(value)
-                    else:
-                        result = int(value)
-                    self.result.successful_fields += 1
-                    return result, True
-                except ValueError:
-                    error = self.create_error(
-                        f"Invalid number format: {value}", "invalid_number"
-                    )
-                    recovered, recovery_value = self.attempt_recovery(error)
-                    self.result.add_error(error)
-                    if recovered:
-                        self.result.successful_fields += 1
-                        return recovery_value, True
-                    return None, False
-
-            elif token.type == TokenType.BOOLEAN:
-                self.advance()
-                self.result.successful_fields += 1
-                return token.value == "true", True
-
-            elif token.type == TokenType.NULL:
-                self.advance()
-                self.result.successful_fields += 1
-                return None, True
-
-            elif token.type == TokenType.IDENTIFIER:
-                error = self.create_error(
-                    f"Unquoted identifier: {token.value}",
-                    "missing_quotes",
-                    "Add quotes around the value",
-                )
-                recovered, recovery_value = self.attempt_recovery(error)
-                self.result.add_error(error)
-
-                if recovered:
-                    self.advance()
-                    self.result.successful_fields += 1
-                    return recovery_value, True
-                else:
-                    self.advance()
-                    return None, False
-
-            elif token.type == TokenType.LBRACE:
-                return self.parse_object_with_recovery()
-
-            elif token.type == TokenType.LBRACKET:
-                return self.parse_array_with_recovery()
-
-            else:
-                error = self.create_error(
-                    f"Unexpected token: {token.type}", "syntax_error"
-                )
-                self.result.add_error(error)
-                self.advance()
-                return None, False
-
-        except Exception as e:
+            return self._parse_token_with_recovery(token)
+        except (ValueError, TypeError, AttributeError) as e:
             error = self.create_error(f"Parse error: {str(e)}", "parse_exception")
             self.result.add_error(error)
             self.skip_to_recovery_point()
             return None, False
 
+    def _parse_token_with_recovery(self, token: Token) -> tuple[Any, bool]:
+        """Parse individual token types with recovery."""
+        token_parsers = {
+            TokenType.STRING: self._parse_string_token,
+            TokenType.NUMBER: self._parse_number_token,
+            TokenType.BOOLEAN: self._parse_boolean_token,
+            TokenType.NULL: self._parse_null_token,
+            TokenType.IDENTIFIER: self._parse_identifier_token,
+            TokenType.LBRACE: lambda t: self.parse_object_with_recovery(),
+            TokenType.LBRACKET: lambda t: self.parse_array_with_recovery(),
+        }
+
+        parser = token_parsers.get(token.type)
+        if parser:
+            return parser(token)
+
+        error = self.create_error(f"Unexpected token: {token.type}", "syntax_error")
+        self.result.add_error(error)
+        self.advance()
+        return None, False
+
+    def _parse_string_token(self, token: Token) -> tuple[Any, bool]:
+        """Parse string token with validation."""
+        if self.validator:
+            self.validator.validate_string_length(token.value)
+        self.advance()
+        self.result.successful_fields += 1
+        return token.value, True
+
+    def _parse_number_token(self, token: Token) -> tuple[Any, bool]:
+        """Parse number token with validation and recovery."""
+        if self.validator:
+            self.validator.validate_number_length(token.value)
+        self.advance()
+        value = token.value
+        try:
+            if "." in value or "e" in value.lower():
+                result = float(value)
+            else:
+                result = int(value)
+            self.result.successful_fields += 1
+            return result, True
+        except ValueError:
+            error = self.create_error(
+                f"Invalid number format: {value}", "invalid_number"
+            )
+            recovered, recovery_value = self.attempt_recovery(error)
+            self.result.add_error(error)
+            if recovered:
+                self.result.successful_fields += 1
+                return recovery_value, True
+            return None, False
+
+    def _parse_boolean_token(self, token: Token) -> tuple[Any, bool]:
+        """Parse boolean token."""
+        self.advance()
+        self.result.successful_fields += 1
+        return token.value == "true", True
+
+    def _parse_null_token(self, token: Token) -> tuple[Any, bool]:
+        """Parse null token."""
+        _ = token  # Token parameter used for consistency in parser interface
+        self.advance()
+        self.result.successful_fields += 1
+        return None, True
+
+    def _parse_identifier_token(self, token: Token) -> tuple[Any, bool]:
+        """Parse identifier token with recovery."""
+        error = self.create_error(
+            f"Unquoted identifier: {token.value}",
+            "missing_quotes",
+            "Add quotes around the value",
+        )
+        recovered, recovery_value = self.attempt_recovery(error)
+        self.result.add_error(error)
+
+        if recovered:
+            self.advance()
+            self.result.successful_fields += 1
+            return recovery_value, True
+        self.advance()
+        return None, False
+
     def parse_object_with_recovery(self) -> tuple[dict[str, Any], bool]:
         """Parse an object with error recovery."""
         self.skip_whitespace_and_newlines()
 
-        current_token = self.current_token()
-        if not current_token or current_token.type != TokenType.LBRACE:
-            error = self.create_error("Expected '{'", "syntax_error")
-            self.result.add_error(error)
+        if not self._validate_object_start():
             return {}, False
 
         if self.validator:
@@ -410,82 +648,122 @@ class PartialParser:
         self.advance()
         self.skip_whitespace_and_newlines()
 
-        obj: dict[str, Any] = {}
-        obj_success = True
-
-        current_token = self.current_token()
-        if current_token and current_token.type == TokenType.RBRACE:
-            self.advance()
+        # Handle empty object
+        if self._is_empty_object():
             if self.validator:
                 self.validator.exit_structure()
             self.result.successful_fields += 1
-            return obj, True
+            return {}, True
+
+        obj, obj_success = self._parse_object_content()
+        self._finalize_object_parsing(obj_success)
+
+        if obj_success and obj:
+            self.result.successful_fields += 1
+
+        return obj, obj_success or bool(obj)
+
+    def _validate_object_start(self) -> bool:
+        """Validate object opening brace."""
+        current_token = self.current_token()
+        if not current_token or current_token.type != TokenType.LBRACE:
+            error = self.create_error("Expected '{'", "syntax_error")
+            self.result.add_error(error)
+            return False
+        return True
+
+    def _is_empty_object(self) -> bool:
+        """Check if object is empty."""
+        current_token = self.current_token()
+        return bool(
+            current_token is not None and current_token.type == TokenType.RBRACE
+        )
+
+    def _parse_object_content(self) -> tuple[dict[str, Any], bool]:
+        """Parse object key-value pairs."""
+        obj: dict[str, Any] = {}
+        obj_success = True
 
         while True:
             current_token = self.current_token()
             if not current_token or current_token.type == TokenType.RBRACE:
                 break
-            (
-                key_success,
-                key,
-                value_success,
-                value,
-            ) = self._parse_object_pair_with_recovery()
+
+            key_success, key, value_success, value = (
+                self._parse_object_pair_with_recovery()
+            )
 
             if key_success and key is not None and value_success:
                 obj[key] = value
 
+            if not self._handle_object_separator():
+                obj_success = False
+                break
+
+        return obj, obj_success
+
+    def _handle_object_separator(self) -> bool:
+        """Handle comma/end of object. Returns True to continue, False to break."""
+        self.skip_whitespace_and_newlines()
+        current = self.current_token()
+
+        if not current:
+            error = self.create_error(
+                "Unexpected end of input in object", "unclosed_object"
+            )
+            self.result.add_error(error)
+            return False
+
+        if current.type == TokenType.COMMA:
+            self.advance()
             self.skip_whitespace_and_newlines()
+            return self._handle_trailing_comma()
 
-            current = self.current_token()
-            if not current:
-                error = self.create_error(
-                    "Unexpected end of input in object", "unclosed_object"
+        if current.type == TokenType.RBRACE:
+            return False
+
+        return self._handle_object_separator_error(current)
+
+    def _handle_trailing_comma(self) -> bool:
+        """Handle trailing comma in object."""
+        current_token = self.current_token()
+        if current_token and current_token.type == TokenType.RBRACE:
+            if self.recovery_level in [
+                RecoveryLevel.BEST_EFFORT,
+                RecoveryLevel.EXTRACT_ALL,
+            ]:
+                warning = self.create_error(
+                    "Trailing comma in object",
+                    "trailing_comma",
+                    "Remove trailing comma",
+                    ErrorSeverity.WARNING,
                 )
-                self.result.add_error(error)
-                obj_success = False
-                break
+                warning.recovery_attempted = True
+                warning.recovery_action = RecoveryAction.REMOVED_COMMA
+                self.result.add_error(warning)
+            return False
+        return True
 
-            if current.type == TokenType.COMMA:
-                self.advance()
-                self.skip_whitespace_and_newlines()
+    def _handle_object_separator_error(self, current: Token) -> bool:
+        """Handle error in object separator."""
+        error = self.create_error(
+            f"Expected ', ' or '}}' but found {current.type}",
+            "syntax_error",
+        )
+        self.result.add_error(error)
 
-                current_token = self.current_token()
-                if current_token and current_token.type == TokenType.RBRACE:
-                    if self.recovery_level in [
-                        RecoveryLevel.BEST_EFFORT,
-                        RecoveryLevel.EXTRACT_ALL,
-                    ]:
-                        warning = self.create_error(
-                            "Trailing comma in object",
-                            "trailing_comma",
-                            "Remove trailing comma",
-                            ErrorSeverity.WARNING,
-                        )
-                        warning.recovery_attempted = True
-                        warning.recovery_action = RecoveryAction.REMOVED_COMMA
-                        self.result.add_error(warning)
-                    break
-            elif current.type == TokenType.RBRACE:
-                break
-            else:
-                error = self.create_error(
-                    f"Expected ', ' or '}}' but found {current.type}",
-                    "syntax_error",
-                )
-                self.result.add_error(error)
-                obj_success = False
+        if self.recovery_level in [
+            RecoveryLevel.SKIP_FIELDS,
+            RecoveryLevel.BEST_EFFORT,
+            RecoveryLevel.EXTRACT_ALL,
+        ]:
+            self.skip_to_recovery_point()
+            return True
+        return False
 
-                if self.recovery_level in [
-                    RecoveryLevel.SKIP_FIELDS,
-                    RecoveryLevel.BEST_EFFORT,
-                    RecoveryLevel.EXTRACT_ALL,
-                ]:
-                    self.skip_to_recovery_point()
-                    continue
-                else:
-                    break
-
+    def _finalize_object_parsing(self, obj_success: bool) -> None:
+        """Finalize object parsing and validate closing brace."""
+        _ = obj_success  # Parameter kept for future error handling extensions
         current_token = self.current_token()
         if current_token and current_token.type == TokenType.RBRACE:
             self.advance()
@@ -494,12 +772,6 @@ class PartialParser:
         else:
             error = self.create_error("Expected '}' to close object", "unclosed_object")
             self.result.add_error(error)
-            obj_success = False
-
-        if obj_success and obj:
-            self.result.successful_fields += 1
-
-        return obj, obj_success or bool(obj)
 
     def _parse_object_pair_with_recovery(self) -> tuple[bool, Optional[str], bool, Any]:
         """Parse a key-value pair with recovery."""
@@ -544,8 +816,7 @@ class PartialParser:
             ]:
                 self.skip_to_recovery_point()
                 return False, None, False, None
-            else:
-                return False, None, False, None
+            return False, None, False, None
 
         self.skip_whitespace_and_newlines()
 
@@ -600,10 +871,7 @@ class PartialParser:
         """Parse an array with error recovery."""
         self.skip_whitespace_and_newlines()
 
-        current_token = self.current_token()
-        if not current_token or current_token.type != TokenType.LBRACKET:
-            error = self.create_error("Expected '['", "syntax_error")
-            self.result.add_error(error)
+        if not self._validate_array_start():
             return [], False
 
         if self.validator:
@@ -612,88 +880,134 @@ class PartialParser:
         self.advance()
         self.skip_whitespace_and_newlines()
 
-        arr: list[Any] = []
-        arr_success = True
-        element_index = 0
-
-        current_token = self.current_token()
-        if current_token and current_token.type == TokenType.RBRACKET:
-            self.advance()
+        # Handle empty array
+        if self._is_empty_array():
             if self.validator:
                 self.validator.exit_structure()
             self.result.successful_fields += 1
-            return arr, True
+            return [], True
+
+        arr, arr_success = self._parse_array_content()
+        self._finalize_array_parsing(arr_success)
+
+        if arr_success and arr:
+            self.result.successful_fields += 1
+
+        return arr, arr_success or bool(arr)
+
+    def _validate_array_start(self) -> bool:
+        """Validate array opening bracket."""
+        current_token = self.current_token()
+        if not current_token or current_token.type != TokenType.LBRACKET:
+            error = self.create_error("Expected '['", "syntax_error")
+            self.result.add_error(error)
+            return False
+        return True
+
+    def _is_empty_array(self) -> bool:
+        """Check if array is empty."""
+        current_token = self.current_token()
+        return bool(
+            current_token is not None and current_token.type == TokenType.RBRACKET
+        )
+
+    def _parse_array_content(self) -> tuple[list[Any], bool]:
+        """Parse array elements."""
+        arr: list[Any] = []
+        arr_success = True
+        element_index = 0
 
         while True:
             current_token = self.current_token()
             if not current_token or current_token.type == TokenType.RBRACKET:
                 break
-            self.current_path.append(f"[{element_index}]")
 
-            # Parse array element
+            if not self._parse_array_element(arr, element_index):
+                arr_success = False
+                break
+
+            element_index += 1
+
+        return arr, arr_success
+
+    def _parse_array_element(self, arr: list[Any], element_index: int) -> bool:
+        """Parse a single array element. Returns True to continue, False to break."""
+        self.current_path.append(f"[{element_index}]")
+
+        try:
             value, success = self.parse_value_with_recovery()
 
             if success:
                 arr.append(value)
             elif self.recovery_level in [RecoveryLevel.EXTRACT_ALL]:
-                # Include None for failed elements in extract_all mode
                 arr.append(None)
 
+            return self._handle_array_separator()
+        finally:
             self.current_path.pop()
-            element_index += 1
 
+    def _handle_array_separator(self) -> bool:
+        """Handle comma/end of array. Returns True to continue, False to break."""
+        self.skip_whitespace_and_newlines()
+        current = self.current_token()
+
+        if not current:
+            error = self.create_error(
+                "Unexpected end of input in array", "unclosed_array"
+            )
+            self.result.add_error(error)
+            return False
+
+        if current.type == TokenType.COMMA:
+            self.advance()
             self.skip_whitespace_and_newlines()
+            return self._handle_array_trailing_comma()
 
-            current = self.current_token()
-            if not current:
-                error = self.create_error(
-                    "Unexpected end of input in array", "unclosed_array"
+        if current.type == TokenType.RBRACKET:
+            return False
+
+        return self._handle_array_separator_error(current)
+
+    def _handle_array_trailing_comma(self) -> bool:
+        """Handle trailing comma in array."""
+        current_token = self.current_token()
+        if current_token and current_token.type == TokenType.RBRACKET:
+            if self.recovery_level in [
+                RecoveryLevel.BEST_EFFORT,
+                RecoveryLevel.EXTRACT_ALL,
+            ]:
+                warning = self.create_error(
+                    "Trailing comma in array",
+                    "trailing_comma",
+                    "Remove trailing comma",
+                    ErrorSeverity.WARNING,
                 )
-                self.result.add_error(error)
-                arr_success = False
-                break
+                warning.recovery_attempted = True
+                warning.recovery_action = RecoveryAction.REMOVED_COMMA
+                self.result.add_error(warning)
+            return False
+        return True
 
-            if current.type == TokenType.COMMA:
-                self.advance()
-                self.skip_whitespace_and_newlines()
+    def _handle_array_separator_error(self, current: Token) -> bool:
+        """Handle error in array separator."""
+        error = self.create_error(
+            f"Expected ', ' or ']' but found {current.type}",
+            "syntax_error",
+        )
+        self.result.add_error(error)
 
-                current_token = self.current_token()
-                if current_token and current_token.type == TokenType.RBRACKET:
-                    if self.recovery_level in [
-                        RecoveryLevel.BEST_EFFORT,
-                        RecoveryLevel.EXTRACT_ALL,
-                    ]:
-                        warning = self.create_error(
-                            "Trailing comma in array",
-                            "trailing_comma",
-                            "Remove trailing comma",
-                            ErrorSeverity.WARNING,
-                        )
-                        warning.recovery_attempted = True
-                        warning.recovery_action = RecoveryAction.REMOVED_COMMA
-                        self.result.add_error(warning)
-                    break
-            elif current.type == TokenType.RBRACKET:
-                break
-            else:
-                error = self.create_error(
-                    f"Expected ', ' or ']' but found {current.type}",
-                    "syntax_error",
-                )
-                self.result.add_error(error)
-                arr_success = False
+        if self.recovery_level in [
+            RecoveryLevel.SKIP_FIELDS,
+            RecoveryLevel.BEST_EFFORT,
+            RecoveryLevel.EXTRACT_ALL,
+        ]:
+            self.skip_to_recovery_point()
+            return True
+        return False
 
-                if self.recovery_level in [
-                    RecoveryLevel.SKIP_FIELDS,
-                    RecoveryLevel.BEST_EFFORT,
-                    RecoveryLevel.EXTRACT_ALL,
-                ]:
-                    self.skip_to_recovery_point()
-                    continue
-                else:
-                    break
-
-        # Close array
+    def _finalize_array_parsing(self, arr_success: bool) -> None:
+        """Finalize array parsing and validate closing bracket."""
+        _ = arr_success  # Parameter kept for future error handling extensions
         current_token = self.current_token()
         if current_token and current_token.type == TokenType.RBRACKET:
             self.advance()
@@ -702,25 +1016,19 @@ class PartialParser:
         else:
             error = self.create_error("Expected ']' to close array", "unclosed_array")
             self.result.add_error(error)
-            arr_success = False
-
-        if arr_success and arr:
-            self.result.successful_fields += 1
-
-        return arr, arr_success or bool(arr)  # Partial success if we got any data
 
     def parse_partial(self) -> PartialParseResult:
         """Parse with error recovery and return detailed results."""
         try:
             self.skip_whitespace_and_newlines()
-            data, success = self.parse_value_with_recovery()
+            data, _ = self.parse_value_with_recovery()  # success unused for now
 
             self.result.data = data
             self.result.calculate_success_rate()
 
             return self.result
 
-        except Exception as e:
+        except (ValueError, TypeError, AttributeError, RecursionError) as e:
             error = self.create_error(f"Fatal parsing error: {str(e)}", "fatal_error")
             self.result.add_error(error)
             self.result.calculate_success_rate()
@@ -745,8 +1053,6 @@ def parse_partial(
     """
     if config is None:
         config = ParseConfig(include_position=True, include_context=True)
-
-    from ..core.transformer import JSONPreprocessor
 
     preprocessed_text = JSONPreprocessor.preprocess(
         text, aggressive=config.aggressive, config=config.preprocessing_config

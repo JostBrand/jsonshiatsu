@@ -4,8 +4,11 @@ Parser for jsonshiatsu - converts tokens into Python data structures.
 
 import io
 import json
-from typing import Any, Callable, Optional, TextIO, Union
+import math
+from typing import Any, Callable, NoReturn, Optional, TextIO, Union
 
+# Import recovery functions - done here to avoid circular imports
+from ..recovery.strategies import RecoveryLevel, parse_with_fallback
 from ..security.exceptions import (
     ErrorReporter,
     ErrorSuggestionEngine,
@@ -13,12 +16,42 @@ from ..security.exceptions import (
     SecurityError,
 )
 from ..security.limits import LimitValidator
-from ..utils.config import ParseConfig
+from ..streaming.processor import StreamingParser
+from ..utils.config import ParseConfig, ParseLimits, PreprocessingConfig
+from .parser_base import BaseParserMixin
 from .tokenizer import Lexer, Position, Token, TokenType
 from .transformer import JSONPreprocessor
 
 
-class Parser:
+class TokenCache:
+    """Cache for token access optimization."""
+
+    def __init__(self) -> None:
+        self.token: Optional[Token] = None
+        self.pos = -1
+
+    def get(self, tokens: list[Token], current_pos: int) -> Token:
+        """Get cached token or fetch new one."""
+        if self.pos != current_pos:
+            if current_pos >= len(tokens):
+                if tokens:
+                    self.token = tokens[-1]
+                else:
+                    # Create a dummy EOF token if no tokens exist
+                    self.token = Token(TokenType.EOF, "", Position(0, 0))
+            else:
+                self.token = tokens[current_pos]
+            self.pos = current_pos
+        return self.token  # type: ignore
+
+    def invalidate(self) -> None:
+        """Invalidate the cache."""
+        self.pos = -1
+
+
+class Parser(BaseParserMixin):
+    """JSON parser that converts tokens into Python data structures."""
+
     def __init__(
         self,
         tokens: list[Token],
@@ -26,10 +59,8 @@ class Parser:
         error_reporter: Optional[ErrorReporter] = None,
     ):
         self.tokens = tokens
-        self.tokens_length = len(tokens)  # Cache length for performance
         self.pos = 0
         self.config = config
-        from ..utils.config import ParseLimits
 
         # Optional validator for performance when limits are not needed
         self.validator = (
@@ -37,39 +68,35 @@ class Parser:
         )
         self.error_reporter = error_reporter
         # Token caching for performance
-        self._token_cache: Optional[Token] = None
-        self._token_cache_pos = -1
+        self._cache = TokenCache()
 
     def current_token(self) -> Token:
-        if self._token_cache_pos != self.pos:
-            if self.pos >= self.tokens_length:
-                if self.tokens:
-                    self._token_cache = self.tokens[-1]
-                else:
-                    # Create a dummy EOF token if no tokens exist
-                    self._token_cache = Token(TokenType.EOF, "", Position(0, 0))
-            else:
-                self._token_cache = self.tokens[self.pos]
-            self._token_cache_pos = self.pos
-        # At this point _token_cache is guaranteed to be not None
-        return self._token_cache  # type: ignore
+        """Get the current token with caching for performance."""
+        return self._cache.get(self.tokens, self.pos)
 
     def peek_token(self, offset: int = 1) -> Token:
+        """Look ahead at a token without advancing position."""
         pos = self.pos + offset
-        if pos >= self.tokens_length:
-            return self.tokens[-1]
+        if pos >= len(self.tokens):
+            return (
+                self.tokens[-1]
+                if self.tokens
+                else Token(TokenType.EOF, "", Position(0, 0))
+            )
         return self.tokens[pos]
 
     def advance(self) -> Token:
+        """Move to the next token and return the current token."""
         token = self.current_token()
-        if self.pos < self.tokens_length - 1:
+        if self.pos < len(self.tokens) - 1:
             self.pos += 1
-            self._token_cache_pos = -1  # Invalidate cache
+            self._cache.invalidate()  # Invalidate cache
         return token
 
     def skip_whitespace_and_newlines(self) -> None:
+        """Skip over whitespace and newline tokens."""
         while (
-            self.pos < self.tokens_length
+            self.pos < len(self.tokens)
             and self.tokens[self.pos].type
             in (
                 TokenType.WHITESPACE,
@@ -79,163 +106,144 @@ class Parser:
         ):
             self.advance()
 
-    def parse_value(self) -> Any:
-        self.skip_whitespace_and_newlines()
-        token = self.current_token()
-
+    def _parse_simple_value(self, token: Token) -> tuple[bool, Any]:
+        """Parse simple values (string, number, boolean, null). Returns (found, value)."""
         if token.type == TokenType.STRING:
             if self.validator:
                 self.validator.validate_string_length(
                     token.value, f"line {token.position.line}"
                 )
             self.advance()
-            return self._unescape_string(token.value)
+            return True, self._unescape_string(token.value)
 
-        elif token.type == TokenType.NUMBER:
+        if token.type == TokenType.NUMBER:
             if self.validator:
                 self.validator.validate_number_length(
                     token.value, f"line {token.position.line}"
                 )
             self.advance()
-            value = token.value
-            if "." in value or "e" in value.lower():
-                return float(value)
-            return int(value)
+            return True, self.parse_number_token(token)
 
-        elif token.type == TokenType.BOOLEAN:
+        if token.type == TokenType.BOOLEAN:
             self.advance()
-            return token.value == "true"
+            return True, self.parse_boolean_token(token)
 
-        elif token.type == TokenType.NULL:
+        if token.type == TokenType.NULL:
             self.advance()
-            return None
+            return True, self.parse_null_token(token)
 
-        elif token.type == TokenType.IDENTIFIER:
-            if self.validator:
-                self.validator.validate_string_length(
-                    token.value, f"line {token.position.line}"
-                )
-            identifier_value = token.value
+        return False, None  # Not a simple value
+
+    def _parse_identifier_value(self, token: Token) -> Any:
+        """Parse identifier values including function calls."""
+        if self.validator:
+            self.validator.validate_string_length(
+                token.value, f"line {token.position.line}"
+            )
+        identifier_value = token.value
+        self.advance()
+
+        if self.current_token().type == TokenType.STRING and identifier_value in [
+            "Date",
+            "RegExp",
+            "ObjectId",
+            "UUID",
+            "ISODate",
+        ]:
+            string_value = self.current_token().value
             self.advance()
+            return string_value
 
-            if self.current_token().type == TokenType.STRING and identifier_value in [
-                "Date",
-                "RegExp",
-                "ObjectId",
-                "UUID",
-                "ISODate",
-            ]:
-                string_value = self.current_token().value
-                self.advance()
-                return string_value
+        return identifier_value
 
-            return identifier_value
+    def parse_value(self) -> Any:
+        """Parse a JSON value (string, number, boolean, null, object, or array)."""
+        self.skip_whitespace_and_newlines()
+        token = self.current_token()
 
-        elif token.type == TokenType.LBRACE:
+        # Try simple values first
+        found, result = self._parse_simple_value(token)
+        if found:
+            return result
+
+        # Handle identifier values
+        if token.type == TokenType.IDENTIFIER:
+            return self._parse_identifier_value(token)
+
+        # Handle complex structures
+        if token.type == TokenType.LBRACE:
             return self.parse_object()
 
-        elif token.type == TokenType.LBRACKET:
+        if token.type == TokenType.LBRACKET:
             return self.parse_array()
 
-        else:
+        # This method always raises an exception so no return is needed
+        self._raise_parse_error(
+            f"Unexpected token: {token.type}",
+            token.position,
+            ErrorSuggestionEngine.suggest_for_unexpected_token(str(token.value)),
+        )
+
+    def _parse_object_key(self) -> str:
+        """Parse an object key and return it."""
+        key_token = self.current_token()
+        if key_token.type in [TokenType.STRING, TokenType.IDENTIFIER]:
+            key = key_token.value
+            self.advance()
+            return key
+
+        self._raise_parse_error(
+            "Expected object key",
+            key_token.position,
+            [
+                "Object keys must be strings or identifiers",
+                "Use quotes around keys with special characters",
+            ],
+        )
+
+    def _expect_colon(self) -> None:
+        """Expect and consume a colon token."""
+        if self.current_token().type != TokenType.COLON:
             self._raise_parse_error(
-                f"Unexpected token: {token.type}",
-                token.position,
-                ErrorSuggestionEngine.suggest_for_unexpected_token(str(token.value)),
+                "Expected ':' after key",
+                self.current_token().position,
+                [
+                    "Object keys must be followed by a colon",
+                    "Check for missing colon after key",
+                ],
             )
-
-    def parse_object(self) -> dict[str, Any]:
-        self.skip_whitespace_and_newlines()
-
-        if self.current_token().type != TokenType.LBRACE:
-            self._raise_parse_error("Expected '{'", self.current_token().position)
-
-        if self.validator:
-            self.validator.enter_structure()
-
         self.advance()
-        self.skip_whitespace_and_newlines()
 
-        obj: dict[str, Any] = {}
+    def _parse_object_value(self) -> Any:
+        """Parse an object value, handling errors gracefully."""
+        try:
+            return self.parse_value()
+        except ParseError:
+            return None
+
+    def _should_continue_object_parsing(self) -> bool:
+        """Check if object parsing should continue after a key-value pair."""
+        if self.current_token().type == TokenType.COMMA:
+            self.advance()
+            self.skip_whitespace_and_newlines()
+            return self.current_token().type != TokenType.RBRACE
 
         if self.current_token().type == TokenType.RBRACE:
-            self.advance()
-            if self.validator:
-                self.validator.exit_structure()
-            return obj
+            return False
 
-        while True:
-            self.skip_whitespace_and_newlines()
+        if self.current_token().type == TokenType.EOF:
+            self._raise_parse_error(
+                "Unexpected end of input, expected '}' to close object",
+                self.current_token().position,
+                ErrorSuggestionEngine.suggest_for_unclosed_structure("object"),
+            )
+        return True
 
-            key_token = self.current_token()
-            if key_token.type in [TokenType.STRING, TokenType.IDENTIFIER]:
-                key = key_token.value
-                self.advance()
-            else:
-                self._raise_parse_error(
-                    "Expected object key",
-                    key_token.position,
-                    [
-                        "Object keys must be strings or identifiers",
-                        "Use quotes around keys with special characters",
-                    ],
-                )
-
-            self.skip_whitespace_and_newlines()
-
-            if self.current_token().type != TokenType.COLON:
-                self._raise_parse_error(
-                    "Expected ':' after key",
-                    self.current_token().position,
-                    [
-                        "Object keys must be followed by a colon",
-                        "Check for missing colon after key",
-                    ],
-                )
-
-            self.advance()
-            self.skip_whitespace_and_newlines()
-
-            try:
-                value = self.parse_value()
-            except ParseError:
-                value = None
-
-            if key in obj and not self.config.duplicate_keys:
-                obj[key] = value
-            elif key in obj and self.config.duplicate_keys:
-                if not isinstance(obj[key], list):
-                    obj[key] = [obj[key]]
-                obj[key].append(value)
-            else:
-                obj[key] = value
-
-            if self.validator:
-                self.validator.validate_object_keys(len(obj))
-
-            self.skip_whitespace_and_newlines()
-
-            if self.current_token().type == TokenType.COMMA:
-                self.advance()
-                self.skip_whitespace_and_newlines()
-
-                if self.current_token().type == TokenType.RBRACE:
-                    break
-
-            elif self.current_token().type == TokenType.RBRACE:
-                break
-            else:
-                if self.current_token().type == TokenType.EOF:
-                    self._raise_parse_error(
-                        "Unexpected end of input, expected '}' to close object",
-                        self.current_token().position,
-                        ErrorSuggestionEngine.suggest_for_unclosed_structure("object"),
-                    )
-
+    def _finalize_object_parsing(self) -> None:
+        """Finalize object parsing by consuming closing brace."""
         if self.current_token().type == TokenType.RBRACE:
             self.advance()
-            if self.validator:
-                self.validator.exit_structure()
+            self.validate_and_exit_structure(self.validator)
         else:
             self._raise_parse_error(
                 "Expected '}' to close object",
@@ -243,70 +251,134 @@ class Parser:
                 ErrorSuggestionEngine.suggest_for_unclosed_structure("object"),
             )
 
-        return obj
-
-    def parse_array(self) -> list[Any]:
+    def parse_object(self) -> dict[str, Any]:
+        """Parse a JSON object into a Python dictionary."""
         self.skip_whitespace_and_newlines()
 
-        if self.current_token().type != TokenType.LBRACKET:
-            self._raise_parse_error("Expected '['", self.current_token().position)
+        if self.current_token().type != TokenType.LBRACE:
+            self._raise_parse_error("Expected '{'", self.current_token().position)
 
-        if self.validator:
-            self.validator.enter_structure()
-
+        self.validate_and_enter_structure(self.validator)
         self.advance()
         self.skip_whitespace_and_newlines()
 
-        arr: list[Any] = []
+        obj = self.init_empty_object()
 
-        if self.current_token().type == TokenType.RBRACKET:
+        if self.current_token().type == TokenType.RBRACE:
             self.advance()
-            if self.validator:
-                self.validator.exit_structure()
-            return arr
+            self.validate_and_exit_structure(self.validator)
+            return obj
 
+        while True:
+            self.skip_whitespace_and_newlines()
+
+            key = self._parse_object_key()
+            self.skip_whitespace_and_newlines()
+            self._expect_colon()
+            self.skip_whitespace_and_newlines()
+
+            value = self._parse_object_value()
+            self.handle_duplicate_key(obj, key, value, self.config.duplicate_keys)
+
+            if self.validator:
+                self.validator.validate_object_keys(len(obj))
+
+            self.skip_whitespace_and_newlines()
+
+            if not self._should_continue_object_parsing():
+                break
+
+        self._finalize_object_parsing()
+        return obj
+
+    def parse_array(self) -> list[Any]:
+        """Parse a JSON array into a Python list."""
+        self._validate_array_start()
+        self._prepare_array_parsing()
+
+        arr = self.init_empty_array()
+
+        if self._is_empty_array():
+            return self._finalize_empty_array()
+
+        self._parse_array_elements(arr)
+        self._finalize_array_parsing()
+
+        return arr
+
+    def _validate_array_start(self) -> None:
+        """Validate that array starts with '['."""
+        self.skip_whitespace_and_newlines()
+        if self.current_token().type != TokenType.LBRACKET:
+            self._raise_parse_error("Expected '['", self.current_token().position)
+
+    def _prepare_array_parsing(self) -> None:
+        """Prepare for array parsing by entering structure and advancing."""
+        self.validate_and_enter_structure(self.validator)
+        self.advance()
+        self.skip_whitespace_and_newlines()
+
+    def _is_empty_array(self) -> bool:
+        """Check if array is empty."""
+        return self.current_token().type == TokenType.RBRACKET
+
+    def _finalize_empty_array(self) -> list[Any]:
+        """Handle empty array finalization."""
+        self.advance()
+        self.validate_and_exit_structure(self.validator)
+        return self.init_empty_array()
+
+    def _parse_array_elements(self, arr: list[Any]) -> None:
+        """Parse array elements until closing bracket."""
         while True:
             self.skip_whitespace_and_newlines()
 
             if self.current_token().type == TokenType.RBRACKET:
                 break
 
-            try:
-                value = self.parse_value()
-                arr.append(value)
-
-                if self.validator:
-                    self.validator.validate_array_items(len(arr))
-            except ParseError:
-                if self.current_token().type not in [
-                    TokenType.RBRACKET,
-                    TokenType.COMMA,
-                ]:
-                    arr.append(None)
-
+            self._parse_single_array_element(arr)
             self.skip_whitespace_and_newlines()
 
-            if self.current_token().type == TokenType.COMMA:
-                self.advance()
-                self.skip_whitespace_and_newlines()
-
-                if self.current_token().type == TokenType.RBRACKET:
-                    break
-
-            elif self.current_token().type == TokenType.RBRACKET:
+            if not self._handle_array_continuation():
                 break
-            else:
-                if self.current_token().type == TokenType.EOF:
-                    self._raise_parse_error(
-                        "Unexpected end of input, expected ']' to close array",
-                        self.current_token().position,
-                        ErrorSuggestionEngine.suggest_for_unclosed_structure("array"),
-                    )
 
+    def _parse_single_array_element(self, arr: list[Any]) -> None:
+        """Parse a single array element with error handling."""
+        try:
+            value = self.parse_value()
+            arr.append(value)
+
+            if self.validator:
+                self.validator.validate_array_items(len(arr))
+        except ParseError:
+            if self.current_token().type not in [TokenType.RBRACKET, TokenType.COMMA]:
+                arr.append(None)
+
+    def _handle_array_continuation(self) -> bool:
+        """Handle array continuation (comma or end). Returns True to continue parsing."""
+        current_type = self.current_token().type
+
+        if current_type == TokenType.COMMA:
+            self.advance()
+            self.skip_whitespace_and_newlines()
+            return self.current_token().type != TokenType.RBRACKET
+
+        if current_type == TokenType.RBRACKET:
+            return False
+
+        if current_type == TokenType.EOF:
+            self._raise_parse_error(
+                "Unexpected end of input, expected ']' to close array",
+                self.current_token().position,
+                ErrorSuggestionEngine.suggest_for_unclosed_structure("array"),
+            )
+        return False
+
+    def _finalize_array_parsing(self) -> None:
+        """Finalize array parsing by closing bracket."""
         if self.current_token().type == TokenType.RBRACKET:
             self.advance()
-            if self.validator:
-                self.validator.exit_structure()
+            self.validate_and_exit_structure(self.validator)
         else:
             self._raise_parse_error(
                 "Expected ']' to close array",
@@ -314,13 +386,44 @@ class Parser:
                 ErrorSuggestionEngine.suggest_for_unclosed_structure("array"),
             )
 
-        return arr
-
     def parse(self) -> Any:
+        """Parse tokens into a complete JSON value."""
         self.skip_whitespace_and_newlines()
         return self.parse_value()
 
+    def _process_escape_sequence(self, s: str, i: int) -> tuple[str, int]:
+        """Process a single escape sequence starting at position i."""
+        next_char = s[i + 1]
+
+        # Standard escape sequences
+        escape_map = {
+            '"': '"',
+            "\\": "\\",
+            "/": "/",
+            "b": "\b",
+            "f": "\f",
+            "n": "\n",
+            "r": "\r",
+            "t": "\t",
+        }
+
+        if next_char in escape_map:
+            return escape_map[next_char], i + 2
+
+        # Unicode escape sequence
+        if next_char == "u" and i + 5 < len(s):
+            try:
+                hex_digits = s[i + 2 : i + 6]
+                unicode_char = chr(int(hex_digits, 16))
+                return unicode_char, i + 6
+            except (ValueError, OverflowError):
+                return s[i], i + 1
+
+        # Invalid escape - return both characters
+        return s[i] + next_char, i + 2
+
     def _unescape_string(self, s: str) -> str:
+        """Process escape sequences in a string."""
         if "\\" not in s:
             return s
 
@@ -328,35 +431,9 @@ class Parser:
         i = 0
         while i < len(s):
             if s[i] == "\\" and i + 1 < len(s):
-                next_char = s[i + 1]
-                if next_char == '"':
-                    result.append('"')
-                elif next_char == "\\":
-                    result.append("\\")
-                elif next_char == "/":
-                    result.append("/")
-                elif next_char == "b":
-                    result.append("\b")
-                elif next_char == "f":
-                    result.append("\f")
-                elif next_char == "n":
-                    result.append("\n")
-                elif next_char == "r":
-                    result.append("\r")
-                elif next_char == "t":
-                    result.append("\t")
-                elif next_char == "u" and i + 5 < len(s):
-                    try:
-                        hex_digits = s[i + 2 : i + 6]
-                        unicode_char = chr(int(hex_digits, 16))
-                        result.append(unicode_char)
-                        i += 5
-                    except (ValueError, OverflowError):
-                        result.append(s[i])
-                else:
-                    result.append(s[i])
-                    result.append(next_char)
-                i += 2
+                chars, new_i = self._process_escape_sequence(s, i)
+                result.append(chars)
+                i = new_i
             else:
                 result.append(s[i])
                 i += 1
@@ -365,11 +442,10 @@ class Parser:
 
     def _raise_parse_error(
         self, message: str, position: Position, suggestions: Optional[list[str]] = None
-    ) -> None:
+    ) -> NoReturn:
         if self.error_reporter:
             raise self.error_reporter.create_parse_error(message, position, suggestions)
-        else:
-            raise ParseError(message, position, suggestions=suggestions)
+        raise ParseError(message, position, suggestions=suggestions)
 
 
 def loads(
@@ -412,14 +488,16 @@ def loads(
         json.JSONDecodeError: If parsing fails (for json compatibility)
         SecurityError: If security limits are exceeded
     """
+    # Handle unused arguments (for JSON API compatibility)
+    _ = cls  # Custom decoder class not supported
+    _ = kw  # Additional keywords ignored
+
     # Convert bytes/bytearray to string if needed
     if isinstance(s, (bytes, bytearray)):
         s = s.decode("utf-8")
 
     # Create configuration from parameters
     if config is None:
-        from ..utils.config import PreprocessingConfig
-
         preprocessing_config = (
             PreprocessingConfig.conservative()
             if strict
@@ -448,8 +526,6 @@ def loads(
 
     except (ParseError, SecurityError) as e:
         # Convert to JSONDecodeError for compatibility
-        import json
-
         raise json.JSONDecodeError(str(e), s, 0) from e
 
 
@@ -532,85 +608,124 @@ def parse(
 def _parse_internal(text: Union[str, TextIO], config: ParseConfig) -> Any:
     """Internal parsing function used by both parse() and loads()."""
     if hasattr(text, "read"):
-        from ..streaming.processor import StreamingParser
-
-        streaming_parser = StreamingParser(config)
-        if isinstance(text, str):
-            stream: TextIO = io.StringIO(text)
-        else:
-            stream = text
-        return streaming_parser.parse_stream(stream)
+        return _parse_from_stream(text, config)
 
     if isinstance(text, str):
-        if config.limits and config.limits.max_input_size:
-            LimitValidator(config.limits).validate_input_size(text)
+        return _parse_from_string(text, config)
 
-        if len(text) > config.streaming_threshold:
-            stream = io.StringIO(text)
-            from ..streaming.processor import StreamingParser
+    raise ValueError("Input must be a string or file-like object")
 
-            streaming_parser = StreamingParser(config)
-            return streaming_parser.parse_stream(stream)
 
-        # Store original text for error reporting (dynamic attribute)
-        config._original_text = text  # type: ignore[attr-defined]
-        error_reporter = (
-            ErrorReporter(text, config.max_error_context)
-            if config.include_position
-            else None
-        )
+def _parse_from_stream(text: Union[str, TextIO], config: ParseConfig) -> Any:
+    """Parse from a stream or file-like object."""
+    streaming_parser = StreamingParser(config)
+    stream = io.StringIO(text) if isinstance(text, str) else text
+    return streaming_parser.parse_stream(stream)
 
-        preprocessed_text = JSONPreprocessor.preprocess(
-            text, aggressive=config.aggressive, config=config.preprocessing_config
-        )
 
+def _parse_from_string(text: str, config: ParseConfig) -> Any:
+    """Parse from a string."""
+    _validate_input_size(text, config)
+
+    if len(text) > config.streaming_threshold:
+        return _parse_via_streaming(text, config)
+
+    return _parse_with_preprocessing(text, config)
+
+
+def _validate_input_size(text: str, config: ParseConfig) -> None:
+    """Validate input size if limits are configured."""
+    if config.limits and config.limits.max_input_size:
+        LimitValidator(config.limits).validate_input_size(text)
+
+
+def _parse_via_streaming(text: str, config: ParseConfig) -> Any:
+    """Parse large text via streaming parser."""
+    stream = io.StringIO(text)
+    streaming_parser = StreamingParser(config)
+    return streaming_parser.parse_stream(stream)
+
+
+def _parse_with_preprocessing(text: str, config: ParseConfig) -> Any:
+    """Parse text with preprocessing and fallback handling."""
+    # Store original text for error reporting
+    config._original_text = text
+    error_reporter = (
+        ErrorReporter(text, config.max_error_context)
+        if config.include_position
+        else None
+    )
+
+    preprocessed_text = JSONPreprocessor.preprocess(
+        text, aggressive=config.aggressive, config=config.preprocessing_config
+    )
+
+    try:
+        return _attempt_primary_parse(preprocessed_text, config, error_reporter)
+    except (ParseError, SecurityError) as e:
+        if config.fallback and not isinstance(e, SecurityError):
+            return _attempt_fallback_parse(
+                text, preprocessed_text, config, error_reporter, e
+            )
+        raise e
+
+
+def _attempt_primary_parse(
+    preprocessed_text: str, config: ParseConfig, error_reporter: Optional[ErrorReporter]
+) -> Any:
+    """Attempt primary parse of preprocessed text."""
+    lexer = Lexer(preprocessed_text)
+    tokens = lexer.get_all_tokens()
+    parser = Parser(tokens, config, error_reporter)
+    return parser.parse()
+
+
+def _attempt_fallback_parse(
+    text: str,
+    preprocessed_text: str,
+    config: ParseConfig,
+    error_reporter: Optional[ErrorReporter],
+    original_error: Exception,
+) -> Any:
+    """Attempt fallback parsing with various strategies."""
+    try:
+        return _try_aggressive_preprocessing(text, config, error_reporter)
+    except (ParseError, SecurityError, ValueError, TypeError):
+        # If that fails, try the recovery system for malformed JSON
         try:
-            lexer = Lexer(preprocessed_text)
-            tokens = lexer.get_all_tokens()
-            parser = Parser(tokens, config, error_reporter)
-            return parser.parse()
+            data, errors = parse_with_fallback(text, RecoveryLevel.EXTRACT_ALL, config)
+            if data is not None:
+                return data
+        except (ParseError, SecurityError, ValueError, TypeError):
+            pass
 
-        except (ParseError, SecurityError) as e:
-            if config.fallback and not isinstance(e, SecurityError):
-                # Try additional preprocessing on failure
+        # If recovery fails, try standard json.loads on various versions
+        try:
+            return json.loads(preprocessed_text)
+        except json.JSONDecodeError:
+            try:
+                return json.loads(text)
+            except json.JSONDecodeError:
+                # Final attempt - try to extract just the JSON part more
+                # aggressively
                 try:
-                    # Apply more aggressive preprocessing
-                    from ..utils.config import PreprocessingConfig
+                    cleaned = JSONPreprocessor.extract_first_json(preprocessed_text)
+                    return json.loads(cleaned)
+                except json.JSONDecodeError:
+                    raise original_error from None
 
-                    # Use more aggressive config for fallback
-                    fallback_config = PreprocessingConfig.aggressive()
-                    fallback_text = JSONPreprocessor.preprocess(
-                        text, True, fallback_config
-                    )
 
-                    # Try parsing the fallback text
-                    lexer = Lexer(fallback_text)
-                    tokens = lexer.get_all_tokens()
-                    parser = Parser(tokens, config, error_reporter)
-                    return parser.parse()
+def _try_aggressive_preprocessing(
+    text: str, config: ParseConfig, error_reporter: Optional[ErrorReporter]
+) -> Any:
+    """Try more aggressive preprocessing as fallback."""
+    fallback_config = PreprocessingConfig.aggressive()
+    fallback_text = JSONPreprocessor.preprocess(text, True, fallback_config)
 
-                except Exception:
-                    # If that fails, try standard json.loads on various versions
-                    try:
-                        return json.loads(preprocessed_text)
-                    except json.JSONDecodeError:
-                        try:
-                            return json.loads(text)
-                        except json.JSONDecodeError:
-                            # Final attempt - try to extract just the JSON part more
-                            # aggressively
-                            try:
-                                cleaned = JSONPreprocessor.extract_first_json(
-                                    preprocessed_text
-                                )
-                                return json.loads(cleaned)
-                            except json.JSONDecodeError:
-                                raise e from None
-            else:
-                raise e
-
-    else:
-        raise ValueError("Input must be a string or file-like object")
+    lexer = Lexer(fallback_text)
+    tokens = lexer.get_all_tokens()
+    parser = Parser(tokens, config, error_reporter)
+    return parser.parse()
 
 
 def _apply_parse_hooks(
@@ -625,21 +740,37 @@ def _apply_parse_hooks(
             k: _apply_parse_hooks(v, parse_float, parse_int, parse_constant)
             for k, v in obj.items()
         }
-    elif isinstance(obj, list):
+
+    if isinstance(obj, list):
         return [
             _apply_parse_hooks(item, parse_float, parse_int, parse_constant)
             for item in obj
         ]
-    elif isinstance(obj, float) and parse_float:
+
+    # Handle numeric and constant types
+    return _apply_numeric_hooks(obj, parse_float, parse_int, parse_constant)
+
+
+def _apply_numeric_hooks(
+    obj: Any,
+    parse_float: Optional[Callable[[str], Any]] = None,
+    parse_int: Optional[Callable[[str], Any]] = None,
+    parse_constant: Optional[Callable[[str], Any]] = None,
+) -> Any:
+    """Apply parse hooks to numeric types and constants."""
+    if isinstance(obj, float) and parse_float:
         return parse_float(str(obj))
-    elif isinstance(obj, int) and parse_int:
+
+    if isinstance(obj, int) and parse_int:
         return parse_int(str(obj))
-    elif obj in (float("inf"), float("-inf")) and parse_constant:
-        return parse_constant("Infinity" if obj == float("inf") else "-Infinity")
-    elif obj != obj and parse_constant:  # NaN check
-        return parse_constant("NaN")
-    else:
-        return obj
+
+    if parse_constant:
+        if obj in (float("inf"), float("-inf")):
+            return parse_constant("Infinity" if obj == float("inf") else "-Infinity")
+        if isinstance(obj, float) and math.isnan(obj):
+            return parse_constant("NaN")
+
+    return obj
 
 
 def _apply_object_hook_recursively(
@@ -653,10 +784,9 @@ def _apply_object_hook_recursively(
         }
         # Then, apply the hook to the dictionary itself
         return hook(processed_obj)
-    elif isinstance(obj, list):
+    if isinstance(obj, list):
         return [_apply_object_hook_recursively(item, hook) for item in obj]
-    else:
-        return obj
+    return obj
 
 
 def _apply_object_pairs_hook_recursively(
@@ -670,10 +800,9 @@ def _apply_object_pairs_hook_recursively(
         ]
         # Apply the hook to the list of pairs
         return hook(processed_items)
-    elif isinstance(obj, list):
+    if isinstance(obj, list):
         return [_apply_object_pairs_hook_recursively(item, hook) for item in obj]
-    else:
-        return obj
+    return obj
 
 
 def dump(
@@ -802,8 +931,8 @@ class JSONDecoder(json.JSONDecoder):
                 # Try to estimate end position
                 end_idx = idx + len(s[idx:].lstrip())
             return result, end_idx
-        except json.JSONDecodeError:
-            raise
+        except json.JSONDecodeError as e:
+            raise e
 
     def _scan_once(self, s: str, idx: int) -> tuple[Any, int]:
         """Internal method for compatibility."""
@@ -817,8 +946,6 @@ class JSONEncoder(json.JSONEncoder):
     Since jsonshiatsu focuses on parsing/repair rather than encoding,
     this class simply delegates to the standard JSONEncoder.
     """
-
-    pass
 
 
 # Import JSONDecodeError from standard json module for compatibility

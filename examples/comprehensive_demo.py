@@ -35,7 +35,6 @@ import jsonshiatsu
 try:
     from jsonshiatsu import (
         ParseConfig,
-        ParseError,
         ParseLimits,
         SecurityError,
     )
@@ -49,11 +48,12 @@ try:
         HAS_RECOVERY = False
 except ImportError:
     # Fallback for basic demo
-    ParseConfig = None  # type: ignore[assignment,misc]
-    ParseError = Exception  # type: ignore[assignment,misc]
-    ParseLimits = None  # type: ignore[assignment,misc]
-    SecurityError = Exception  # type: ignore[assignment,misc]
+    ParseConfig = None  # type: ignore
+    ParseError = Exception
+    ParseLimits = None  # type: ignore
+    SecurityError = Exception  # type: ignore
     HAS_RECOVERY = False
+
 
 
 def print_section(title: str, subtitle: str = "") -> None:
@@ -610,7 +610,8 @@ def main() -> None:
         "DEMO COMPLETE! 🎉", "jsonshiatsu handles JSON that breaks everything else"
     )
 
-    print("""
+    print(
+        """
 ✅ COMPREHENSIVE FEATURE COVERAGE:
    • Unquoted keys and values     • Single and mixed quotes
    • Trailing commas              • JavaScript comments
@@ -636,7 +637,8 @@ def main() -> None:
    • Comprehensive malformation support
 
 Ready to handle any JSON thrown at you? That's the power of jsonshiatsu! 🔥
-""")
+"""
+    )
 
 
 if __name__ == "__main__":
