@@ -649,7 +649,7 @@ def _parse_via_streaming(text: str, config: ParseConfig) -> Any:
 def _parse_with_preprocessing(text: str, config: ParseConfig) -> Any:
     """Parse text with preprocessing and fallback handling."""
     # Store original text for error reporting
-    config._original_text = text
+    config.set_original_text(text)
     error_reporter = (
         ErrorReporter(text, config.max_error_context)
         if config.include_position
@@ -693,7 +693,7 @@ def _attempt_fallback_parse(
     except (ParseError, SecurityError, ValueError, TypeError):
         # If that fails, try the recovery system for malformed JSON
         try:
-            data, errors = parse_with_fallback(text, RecoveryLevel.EXTRACT_ALL, config)
+            data, _ = parse_with_fallback(text, RecoveryLevel.EXTRACT_ALL, config)
             if data is not None:
                 return data
         except (ParseError, SecurityError, ValueError, TypeError):

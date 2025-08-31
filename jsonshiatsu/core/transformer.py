@@ -445,18 +445,19 @@ class JSONPreprocessor:
         return in_string, string_char
 
     @staticmethod
+    def _should_close_structure(char: str, stack: list) -> bool:
+        """Check if character should close a structure."""
+        return (
+            (char == "}" and bool(stack) and stack[-1] == "{") or
+            (char == "]" and bool(stack) and stack[-1] == "[")
+        )
+
+    @staticmethod
     def _handle_structural_brackets(char: str, stack: list) -> None:
         """Handle opening and closing brackets/braces."""
         if char in ["{", "["]:
             stack.append(char)
-        elif (
-            char == "}"
-            and stack
-            and stack[-1] == "{"
-            or char == "]"
-            and stack
-            and stack[-1] == "["
-        ):
+        elif JSONPreprocessor._should_close_structure(char, stack):
             stack.pop()
 
     @staticmethod

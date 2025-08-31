@@ -310,7 +310,7 @@ def demo_error_handling() -> None:
         """
 
         try:
-            result = parse_partial(mixed_data, RecoveryLevel.SKIP_FIELDS)
+            result = parse_partial(mixed_data, RecoveryLevel.SKIP_FIELDS)  # type: ignore
             print("Input had mixed valid/invalid fields")
             print(f"✅ Extracted valid data: {result.data}")
             print(f"📊 Success rate: {result.success_rate:.1f}%")
