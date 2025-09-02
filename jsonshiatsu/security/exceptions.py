@@ -4,6 +4,7 @@ Enhanced error reporting for jsonshiatsu.
 This module provides detailed error information with position tracking and context.
 """
 
+import json
 from dataclasses import dataclass
 from typing import Optional
 
@@ -79,8 +80,29 @@ class SecurityError(JSONShiatsuError):
     """Security limit exceeded error."""
 
 
-class JSONDecodeError(JSONShiatsuError):
+class JSONDecodeError(json.JSONDecodeError):
     """JSON decode error for compatibility with standard json module."""
+
+    def __init__(
+        self,
+        message: str,
+        position: Optional[Position] = None,
+        context: Optional[ErrorContext] = None,
+        suggestions: Optional[list[str]] = None,
+    ):
+        # Standard json.JSONDecodeError expects (msg, doc, pos)
+        # Use position.offset if available, otherwise 0
+        pos = 0
+        if position:
+            pos = getattr(position, "offset", 0)
+
+        # Initialize the standard JSONDecodeError
+        super().__init__(message, "", pos)
+
+        # Add our custom attributes
+        self.position = position
+        self.context = context
+        self.suggestions = suggestions or []
 
 
 class ErrorReporter:

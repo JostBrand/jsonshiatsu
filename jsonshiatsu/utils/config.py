@@ -11,6 +11,7 @@ from typing import Any, Optional
 @dataclass
 class SizeLimits:
     """Input and content size limits."""
+
     max_input_size: int = 10 * 1024 * 1024
     max_string_length: int = 1024 * 1024
     max_number_length: int = 100
@@ -20,6 +21,7 @@ class SizeLimits:
 @dataclass
 class StructureLimits:
     """JSON structure complexity limits."""
+
     max_nesting_depth: int = 100
     max_object_keys: int = 10000
     max_array_items: int = 100000
@@ -42,30 +44,42 @@ class ParseLimits:
     ):
         if size_limits is not None:
             self.size_limits = size_limits
-        elif any(arg in legacy_args for arg in [
-            'max_input_size', 'max_string_length',
-            'max_number_length', 'max_preprocessing_iterations'
-        ]):
+        elif any(
+            arg in legacy_args
+            for arg in [
+                "max_input_size",
+                "max_string_length",
+                "max_number_length",
+                "max_preprocessing_iterations",
+            ]
+        ):
             self.size_limits = SizeLimits(
-                max_input_size=legacy_args.get('max_input_size', 10 * 1024 * 1024),
-                max_string_length=legacy_args.get('max_string_length', 1024 * 1024),
-                max_number_length=legacy_args.get('max_number_length', 100),
-                max_preprocessing_iterations=legacy_args.get('max_preprocessing_iterations', 10),
+                max_input_size=legacy_args.get("max_input_size", 10 * 1024 * 1024),
+                max_string_length=legacy_args.get("max_string_length", 1024 * 1024),
+                max_number_length=legacy_args.get("max_number_length", 100),
+                max_preprocessing_iterations=legacy_args.get(
+                    "max_preprocessing_iterations", 10
+                ),
             )
         else:
             self.size_limits = SizeLimits()
 
         if structure_limits is not None:
             self.structure_limits = structure_limits
-        elif any(arg in legacy_args for arg in [
-            'max_nesting_depth', 'max_object_keys',
-            'max_array_items', 'max_total_items'
-        ]):
+        elif any(
+            arg in legacy_args
+            for arg in [
+                "max_nesting_depth",
+                "max_object_keys",
+                "max_array_items",
+                "max_total_items",
+            ]
+        ):
             self.structure_limits = StructureLimits(
-                max_nesting_depth=legacy_args.get('max_nesting_depth', 100),
-                max_object_keys=legacy_args.get('max_object_keys', 10000),
-                max_array_items=legacy_args.get('max_array_items', 100000),
-                max_total_items=legacy_args.get('max_total_items', 1000000),
+                max_nesting_depth=legacy_args.get("max_nesting_depth", 100),
+                max_object_keys=legacy_args.get("max_object_keys", 10000),
+                max_array_items=legacy_args.get("max_array_items", 100000),
+                max_total_items=legacy_args.get("max_total_items", 1000000),
             )
         else:
             self.structure_limits = StructureLimits()
@@ -128,6 +142,7 @@ class ParseLimits:
 @dataclass
 class ExtractionSettings:
     """Settings for content extraction preprocessing."""
+
     extract_from_markdown: bool = True
     remove_comments: bool = True
     unwrap_function_calls: bool = True
@@ -138,6 +153,7 @@ class ExtractionSettings:
 @dataclass
 class NormalizationSettings:
     """Settings for content normalization."""
+
     normalize_quotes: bool = True
     normalize_boolean_null: bool = True
 
@@ -145,6 +161,7 @@ class NormalizationSettings:
 @dataclass
 class RepairSettings:
     """Settings for malformed JSON repair."""
+
     fix_unescaped_strings: bool = True
     handle_incomplete_json: bool = True
     handle_sparse_arrays: bool = True
@@ -237,7 +254,7 @@ class PreprocessingConfig:
                 fix_unescaped_strings=False,
                 handle_incomplete_json=False,
                 handle_sparse_arrays=False,
-            )
+            ),
         )
 
     @classmethod
@@ -265,21 +282,21 @@ class PreprocessingConfig:
                 fix_unescaped_strings=False,
                 handle_incomplete_json=False,
                 handle_sparse_arrays=False,
-            )
+            ),
         )
 
         # Map old field names to new nested structure
         field_mapping = {
-            'extract_from_markdown': ('extraction', 'extract_from_markdown'),
-            'remove_comments': ('extraction', 'remove_comments'),
-            'unwrap_function_calls': ('extraction', 'unwrap_function_calls'),
-            'extract_first_json': ('extraction', 'extract_first_json'),
-            'remove_trailing_text': ('extraction', 'remove_trailing_text'),
-            'normalize_quotes': ('normalization', 'normalize_quotes'),
-            'normalize_boolean_null': ('normalization', 'normalize_boolean_null'),
-            'fix_unescaped_strings': ('repair', 'fix_unescaped_strings'),
-            'handle_incomplete_json': ('repair', 'handle_incomplete_json'),
-            'handle_sparse_arrays': ('repair', 'handle_sparse_arrays'),
+            "extract_from_markdown": ("extraction", "extract_from_markdown"),
+            "remove_comments": ("extraction", "remove_comments"),
+            "unwrap_function_calls": ("extraction", "unwrap_function_calls"),
+            "extract_first_json": ("extraction", "extract_first_json"),
+            "remove_trailing_text": ("extraction", "remove_trailing_text"),
+            "normalize_quotes": ("normalization", "normalize_quotes"),
+            "normalize_boolean_null": ("normalization", "normalize_boolean_null"),
+            "fix_unescaped_strings": ("repair", "fix_unescaped_strings"),
+            "handle_incomplete_json": ("repair", "handle_incomplete_json"),
+            "handle_sparse_arrays": ("repair", "handle_sparse_arrays"),
         }
 
         # Enable only the specified features
@@ -295,6 +312,7 @@ class PreprocessingConfig:
 @dataclass
 class ParsingBehavior:
     """Core parsing behavior settings."""
+
     fallback: bool = True
     duplicate_keys: bool = False
     aggressive: bool = False
@@ -303,6 +321,7 @@ class ParsingBehavior:
 @dataclass
 class ErrorReporting:
     """Error reporting and context settings."""
+
     include_position: bool = True
     include_context: bool = True
     max_error_context: int = 50
@@ -311,6 +330,7 @@ class ErrorReporting:
 @dataclass
 class StreamingConfig:
     """Streaming and performance settings."""
+
     streaming_threshold: int = 1024 * 1024
 
 
@@ -342,28 +362,30 @@ class ParseConfig:
             self.behavior = behavior
         else:
             self.behavior = ParsingBehavior(
-                fallback=config_options.get('fallback', True),
-                duplicate_keys=config_options.get('duplicate_keys', False),
-                aggressive=config_options.get('aggressive', False),
+                fallback=config_options.get("fallback", True),
+                duplicate_keys=config_options.get("duplicate_keys", False),
+                aggressive=config_options.get("aggressive", False),
             )
 
         if error_reporting is not None:
             self.error_reporting = error_reporting
         else:
             self.error_reporting = ErrorReporting(
-                include_position=config_options.get('include_position', True),
-                include_context=config_options.get('include_context', True),
-                max_error_context=config_options.get('max_error_context', 50),
+                include_position=config_options.get("include_position", True),
+                include_context=config_options.get("include_context", True),
+                max_error_context=config_options.get("max_error_context", 50),
             )
 
         if streaming is not None:
             self.streaming = streaming
         else:
             self.streaming = StreamingConfig(
-                streaming_threshold=config_options.get('streaming_threshold', 1024 * 1024),
+                streaming_threshold=config_options.get(
+                    "streaming_threshold", 1024 * 1024
+                ),
             )
 
-        preprocessing_config = config_options.get('preprocessing_config')
+        preprocessing_config = config_options.get("preprocessing_config")
         if preprocessing_config is not None:
             self.preprocessing_config = preprocessing_config
         elif self.behavior.aggressive:

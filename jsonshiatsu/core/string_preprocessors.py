@@ -141,7 +141,49 @@ class StringPreprocessor:
             # No problematic backslashes found, return unchanged
             return full_match
 
-        text = safe_regex_sub(r'"([^"]*)"', fix_file_paths, text)
+        # Track strings that were processed as file paths to avoid double-processing
+        processed_file_paths = set()
+
+        def fix_file_paths_with_tracking(match: Match[str]) -> str:
+            result = fix_file_paths(match)
+            # If the result was changed (escaped), track the new content
+            if result != match.group(0):
+                # Extract the new content from the result
+                new_content_match = safe_regex_match(r'"([^"]*)"', result)
+                if new_content_match:
+                    processed_file_paths.add(new_content_match.group(1))
+            return result
+
+        text = safe_regex_sub(r'"([^"]*)"', fix_file_paths_with_tracking, text)
+
+        # Also handle over-escaped sequences (common in malformed JSON)
+        # Convert \\n to \n, \\t to \t, etc. within strings
+        def fix_over_escaped(match: Match[str]) -> str:
+            content = match.group(1)
+
+            # Skip over-escaped processing for strings that were already processed as file paths
+            if content in processed_file_paths:
+                return match.group(0)
+
+            # Convert common over-escaped sequences
+            # \\n -> \n, \\t -> \t, \\r -> \r, etc.
+            over_escaped_patterns = [
+                (r"\\\\n", r"\\n"),  # \\n -> \n
+                (r"\\\\t", r"\\t"),  # \\t -> \t
+                (r"\\\\r", r"\\r"),  # \\r -> \r
+                (r"\\\\b", r"\\b"),  # \\b -> \b
+                (r"\\\\f", r"\\f"),  # \\f -> \f
+                (r'\\\\"', r'\\"'),  # \\" -> \"
+                (r"\\\\/", r"\\/"),  # \\/ -> \/
+                (r"\\\\\\\\", r"\\\\"),  # \\\\ -> \\
+            ]
+
+            for pattern, replacement in over_escaped_patterns:
+                content = safe_regex_sub(pattern, replacement, content)
+
+            return f'"{content}"'
+
+        text = safe_regex_sub(r'"([^"]*)"', fix_over_escaped, text)
 
         return text
 

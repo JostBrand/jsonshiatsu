@@ -47,6 +47,7 @@ from .core.engine import (
     loads,
     parse,
 )
+from .recovery._exports import RECOVERY_EXPORTS
 from .recovery.strategies import (
     ErrorSeverity,
     PartialParseError,
@@ -98,10 +99,12 @@ __all__ = [
     "SecurityError",
     # Advanced classes
     "StreamingParser",
-    # Recovery exports
-    "RecoveryLevel",
-    "RecoveryAction",
+    # Recovery classes
     "ErrorSeverity",
-    "PartialParseResult",
     "PartialParseError",
+    "PartialParseResult",
+    "RecoveryAction",
+    "RecoveryLevel",
+    # Recovery exports
+    *RECOVERY_EXPORTS,
 ]

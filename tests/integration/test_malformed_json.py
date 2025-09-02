@@ -5,11 +5,14 @@ Test cases for handling malformed JSON patterns commonly found in real-world dat
 import unittest
 
 from jsonshiatsu import parse
-from jsonshiatsu.core.transformer import JSONPreprocessor
+from jsonshiatsu.preprocessing.extractors import MarkdownExtractor
+from jsonshiatsu.preprocessing.handlers import CommentHandler, JavaScriptHandler
+from jsonshiatsu.preprocessing.repairers import StringRepairer, StructureFixer
+from jsonshiatsu.utils.config import PreprocessingConfig
 
 
 class TestMalformedJSONPatterns(unittest.TestCase):
-    def test_markdown_code_blocks(self):
+    def test_markdown_code_blocks(self) -> None:
         """Test extraction of JSON from markdown code blocks."""
         # Fenced code block with json language
         markdown_json = """```json
@@ -52,7 +55,7 @@ class TestMalformedJSONPatterns(unittest.TestCase):
         }
         self.assertEqual(result, expected)
 
-    def test_trailing_explanatory_text(self):
+    def test_trailing_explanatory_text(self) -> None:
         """Test removal of explanatory text after JSON."""
         # Simple trailing text
         json_with_text = (
@@ -79,7 +82,7 @@ class TestMalformedJSONPatterns(unittest.TestCase):
         result = parse(array_with_text)
         self.assertEqual(result, [1, 2, 3, 4])
 
-    def test_javascript_comments(self):
+    def test_javascript_comments(self) -> None:
         """Test removal of JavaScript-style comments."""
         # Single line comments
         json_with_line_comments = """{
@@ -108,7 +111,7 @@ class TestMalformedJSONPatterns(unittest.TestCase):
         result = parse(json_with_mixed_comments)
         self.assertEqual(result, {"user": {"name": "Alice", "verified": True}})
 
-    def test_multiple_json_objects(self):
+    def test_multiple_json_objects(self) -> None:
         """Test extraction of first JSON when multiple are present."""
         # Two separate objects
         multiple_objects = '{"first": "object"}\n{"second": "object"}'
@@ -125,7 +128,7 @@ class TestMalformedJSONPatterns(unittest.TestCase):
         result = parse(array_then_object)
         self.assertEqual(result, [1, 2, 3])
 
-    def test_function_call_wrappers(self):
+    def test_function_call_wrappers(self) -> None:
         """Test unwrapping of function calls around JSON."""
         # parse_json function call
         parse_call = 'parse_json({"key": "value"})'
@@ -152,7 +155,7 @@ class TestMalformedJSONPatterns(unittest.TestCase):
         result = parse(let_assignment)
         self.assertEqual(result, {"success": True})
 
-    def test_non_standard_boolean_null(self):
+    def test_non_standard_boolean_null(self) -> None:
         """Test normalization of non-standard boolean and null values."""
         # Python-style booleans
         python_booleans = '{"active": True, "disabled": False, "empty": None}'
@@ -174,7 +177,7 @@ class TestMalformedJSONPatterns(unittest.TestCase):
         result = parse(mixed_case)
         self.assertEqual(result, {"a": True, "b": False, "c": None})
 
-    def test_incomplete_json_structures(self):
+    def test_incomplete_json_structures(self) -> None:
         """Test handling of incomplete JSON with aggressive mode."""
         # Missing closing brace
         incomplete_object = '{"name": "John", "age": 30'
@@ -196,7 +199,7 @@ class TestMalformedJSONPatterns(unittest.TestCase):
         result = parse(incomplete_string, aggressive=True)
         self.assertEqual(result, {"message": "Hello world"})
 
-    def test_malformed_strings(self):
+    def test_malformed_strings(self) -> None:
         """Test handling of strings with escaping issues."""
         # Unescaped quotes in strings (basic case)
         # This should be handled by the existing parser's string handling
@@ -210,7 +213,7 @@ class TestMalformedJSONPatterns(unittest.TestCase):
         self.assertIsInstance(result, dict)
         self.assertIn("path", result)
 
-    def test_numbers_with_formatting(self):
+    def test_numbers_with_formatting(self) -> None:
         """Test handling of incorrectly formatted numbers."""
         # Note: These cases might not be fully solvable without breaking valid JSON
         # We test what currently works and document limitations
@@ -224,7 +227,7 @@ class TestMalformedJSONPatterns(unittest.TestCase):
         # Currency symbols, percentage signs, comma separators
         # These are documented as limitations for now
 
-    def test_real_world_complex_cases(self):
+    def test_real_world_complex_cases(self) -> None:
         """Test complex real-world malformed JSON scenarios."""
         # Markdown with comments and trailing text
         complex_case = """```json
@@ -272,89 +275,89 @@ class TestMalformedJSONPatterns(unittest.TestCase):
 class TestJSONPreprocessor(unittest.TestCase):
     """Test the JSONPreprocessor class methods individually."""
 
-    def test_extract_from_markdown(self):
+    def test_extract_from_markdown(self) -> None:
         """Test markdown extraction method."""
         # JSON code block
         markdown = '```json\n{"test": "value"}\n```'
-        result = JSONPreprocessor.extract_from_markdown(markdown)
+        result = MarkdownExtractor().process(markdown, PreprocessingConfig())
         self.assertEqual(result, '{"test": "value"}')
 
         # Plain code block
         plain = '```\n{"test": "value"}\n```'
-        result = JSONPreprocessor.extract_from_markdown(plain)
+        result = MarkdownExtractor().process(plain, PreprocessingConfig())
         self.assertEqual(result, '{"test": "value"}')
 
         # Inline code
         inline = 'Text `{"test": "value"}` more text'
-        result = JSONPreprocessor.extract_from_markdown(inline)
+        result = MarkdownExtractor().process(inline, PreprocessingConfig())
         self.assertEqual(result, '{"test": "value"}')
 
         # No markdown
         no_markdown = '{"test": "value"}'
-        result = JSONPreprocessor.extract_from_markdown(no_markdown)
+        result = MarkdownExtractor().process(no_markdown, PreprocessingConfig())
         self.assertEqual(result, '{"test": "value"}')
 
-    def test_remove_comments(self):
+    def test_remove_comments(self) -> None:
         """Test comment removal method."""
         # Line comments
         with_line_comments = '{"key": "value"} // comment'
-        result = JSONPreprocessor.remove_comments(with_line_comments)
+        result = CommentHandler().process(with_line_comments, PreprocessingConfig())
         self.assertEqual(result.strip(), '{"key": "value"}')
 
         # Block comments
         with_block_comments = '{"key": /* comment */ "value"}'
-        result = JSONPreprocessor.remove_comments(with_block_comments)
+        result = CommentHandler().process(with_block_comments, PreprocessingConfig())
         self.assertEqual(result.strip(), '{"key":  "value"}')
 
-    def test_unwrap_function_calls(self):
+    def test_unwrap_function_calls(self) -> None:
         """Test function call unwrapping method."""
         # Function call
         func_call = 'parse({"key": "value"})'
-        result = JSONPreprocessor.unwrap_function_calls(func_call)
+        result = JavaScriptHandler().process(func_call, PreprocessingConfig())
         self.assertEqual(result, '{"key": "value"}')
 
         # Return statement
         return_stmt = 'return {"key": "value"};'
-        result = JSONPreprocessor.unwrap_function_calls(return_stmt)
+        result = JavaScriptHandler().process(return_stmt, PreprocessingConfig())
         self.assertEqual(result, '{"key": "value"}')
 
         # Variable assignment
         var_assign = 'const data = {"key": "value"};'
-        result = JSONPreprocessor.unwrap_function_calls(var_assign)
+        result = JavaScriptHandler().process(var_assign, PreprocessingConfig())
         self.assertEqual(result, '{"key": "value"}')
 
-    def test_normalize_boolean_null(self):
+    def test_normalize_boolean_null(self) -> None:
         """Test boolean and null normalization method."""
         # Python style
         python_style = '{"a": True, "b": False, "c": None}'
-        result = JSONPreprocessor.normalize_boolean_null(python_style)
+        result = StringRepairer().process(python_style, PreprocessingConfig())
         self.assertEqual(result, '{"a": true, "b": false, "c": null}')
 
         # Yes/No
         yes_no = '{"enabled": yes, "disabled": NO}'
-        result = JSONPreprocessor.normalize_boolean_null(yes_no)
+        result = StringRepairer().process(yes_no, PreprocessingConfig())
         self.assertEqual(result, '{"enabled": true, "disabled": false}')
 
         # Undefined
         undefined = '{"value": undefined}'
-        result = JSONPreprocessor.normalize_boolean_null(undefined)
+        result = StringRepairer().process(undefined, PreprocessingConfig())
         self.assertEqual(result, '{"value": null}')
 
-    def test_handle_incomplete_json(self):
+    def test_handle_incomplete_json(self) -> None:
         """Test incomplete JSON completion method."""
         # Missing closing brace
         incomplete = '{"key": "value"'
-        result = JSONPreprocessor.handle_incomplete_json(incomplete)
+        result = StructureFixer().process(incomplete, PreprocessingConfig())
         self.assertEqual(result, '{"key": "value"}')
 
         # Missing closing bracket
         incomplete_array = '["a", "b"'
-        result = JSONPreprocessor.handle_incomplete_json(incomplete_array)
+        result = StructureFixer().process(incomplete_array, PreprocessingConfig())
         self.assertEqual(result, '["a", "b"]')
 
         # Multiple missing closures
         multiple_missing = '{"array": [1, 2, {"nested": "value"'
-        result = JSONPreprocessor.handle_incomplete_json(multiple_missing)
+        result = StructureFixer().process(multiple_missing, PreprocessingConfig())
         self.assertEqual(result, '{"array": [1, 2, {"nested": "value"}]}')
 
 

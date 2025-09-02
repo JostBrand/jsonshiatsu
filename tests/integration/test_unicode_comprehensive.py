@@ -232,9 +232,10 @@ class TestUnicodeEdgeCases(unittest.TestCase):
         for test_case in test_cases:
             with self.subTest(test_case=test_case):
                 # Should not be modified by preprocessing
-                from jsonshiatsu.core.transformer import JSONPreprocessor
+                from jsonshiatsu.preprocessing.pipeline import PreprocessingPipeline
 
-                preprocessed = JSONPreprocessor.preprocess(test_case)
+                pipeline = PreprocessingPipeline.create_default_pipeline()
+                preprocessed = pipeline.process(test_case)
 
                 # The Unicode escapes should be preserved, not double-escaped
                 self.assertNotIn("\\\\u", preprocessed)  # Should not have \\u
@@ -269,16 +270,16 @@ class TestUnicodeFilePathDistinction(unittest.TestCase):
 
     def test_preprocessing_unicode_detection(self) -> None:
         """Test the preprocessing logic for detecting Unicode vs paths."""
-        from jsonshiatsu.core.transformer import JSONPreprocessor
+        from jsonshiatsu.core.string_preprocessors import StringPreprocessor
 
         # Pure Unicode sequences should not be modified
         pure_unicode = '{"test": "\\u4F60\\u597D"}'
-        processed = JSONPreprocessor.fix_unescaped_strings(pure_unicode)
+        processed = StringPreprocessor.fix_unescaped_strings(pure_unicode)
         self.assertEqual(processed, pure_unicode)  # Should be unchanged
 
         # File paths should be handled appropriately
         file_path = '{"path": "C:\\data\\file"}'
-        processed = JSONPreprocessor.fix_unescaped_strings(file_path)
+        processed = StringPreprocessor.fix_unescaped_strings(file_path)
         # Should handle the file path escaping without breaking Unicode
 
 

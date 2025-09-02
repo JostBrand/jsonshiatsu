@@ -98,12 +98,20 @@ class ArrayObjectHandler:
             # Handle leading commas
             array_content = re.sub(r"^\s*,", "null,", array_content)
 
-            # Handle consecutive commas - replace ,, with , null, up to 10 times
-            for _ in range(10):
-                old_content = array_content
-                array_content = re.sub(r",\s*,", ", null,", array_content, count=1)
-                if array_content == old_content:
-                    break
+            # Handle consecutive commas properly using regex
+            # n consecutive commas = (n-1) missing values
+            # So ,, -> ,null, and ,,, -> ,null,null,
+
+            def replace_consecutive_commas(match: re.Match[str]) -> str:
+                commas = match.group(0)
+                null_count = len(commas) - 1  # n commas = (n-1) missing values
+                if null_count > 0:
+                    return "," + ",".join(["null"] * null_count) + ","
+                else:
+                    return commas  # Single comma, no change
+
+            # Replace sequences of 2 or more consecutive commas
+            array_content = re.sub(r",{2,}", replace_consecutive_commas, array_content)
 
             return "[" + array_content + "]"
 

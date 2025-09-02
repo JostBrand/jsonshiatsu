@@ -5,6 +5,7 @@ Base parser functionality shared between engine and streaming parsers.
 from typing import TYPE_CHECKING, Any, Optional
 
 from ..security.limits import LimitValidator
+from .error_handling import ErrorContextBuilder, ErrorReporterImpl
 from .tokenizer import Token
 
 if TYPE_CHECKING:
@@ -13,6 +14,32 @@ if TYPE_CHECKING:
 
 class BaseParserMixin:
     """Common parsing functionality shared between different parsers."""
+
+    def __init_subclass__(cls, **kwargs: Any) -> None:
+        """Ensure proper interface compliance for subclasses."""
+        super().__init_subclass__(**kwargs)
+        # Could add interface validation here in the future
+
+    def create_error_context(self, original_text: str = "") -> Any:
+        """Create error context from current parser state."""
+        try:
+            # Try to get position from current token if available
+            position = 0
+            if hasattr(self, "current_token"):
+                token = self.current_token()
+                position = getattr(token, "position", 0)
+            elif hasattr(self, "position"):
+                position = self.position
+
+            return ErrorContextBuilder.build_context(position, original_text)
+        except Exception:
+            return ErrorContextBuilder.build_context(0, original_text)
+
+    def create_error_reporter(
+        self, original_text: str = "", include_context: bool = True
+    ) -> ErrorReporterImpl:
+        """Create an error reporter for this parser."""
+        return ErrorReporterImpl(original_text, include_context)
 
     def parse_number_token(self, token: Token) -> Any:
         """Parse a number token into int or float."""
