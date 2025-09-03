@@ -5,6 +5,7 @@ Parser for jsonshiatsu - converts tokens into Python data structures.
 import io
 import json
 import math
+import re
 from typing import Any, Callable, NoReturn, Optional, TextIO, Union
 
 # Import recovery functions - done here to avoid circular imports
@@ -235,6 +236,9 @@ class Parser(BaseParserMixin):
             return False
 
         if self.current_token().type == TokenType.EOF:
+            # In aggressive mode, allow incomplete structures
+            if self.config.behavior and self.config.behavior.aggressive:
+                return False  # Stop parsing gracefully
             self._raise_parse_error(
                 "Unexpected end of input, expected '}' to close object",
                 self.current_token().position,
@@ -247,6 +251,13 @@ class Parser(BaseParserMixin):
         if self.current_token().type == TokenType.RBRACE:
             self.advance()
             self.validate_and_exit_structure(self.validator)
+        elif (
+            self.current_token().type == TokenType.EOF
+            and self.config.behavior
+            and self.config.behavior.aggressive
+        ):
+            # In aggressive mode, allow incomplete objects
+            pass
         else:
             self._raise_parse_error(
                 "Expected '}' to close object",
@@ -370,6 +381,9 @@ class Parser(BaseParserMixin):
             return False
 
         if current_type == TokenType.EOF:
+            # In aggressive mode, allow incomplete structures
+            if self.config.behavior and self.config.behavior.aggressive:
+                return False  # Stop parsing gracefully
             self._raise_parse_error(
                 "Unexpected end of input, expected ']' to close array",
                 self.current_token().position,
@@ -382,6 +396,13 @@ class Parser(BaseParserMixin):
         if self.current_token().type == TokenType.RBRACKET:
             self.advance()
             self.validate_and_exit_structure(self.validator)
+        elif (
+            self.current_token().type == TokenType.EOF
+            and self.config.behavior
+            and self.config.behavior.aggressive
+        ):
+            # In aggressive mode, allow incomplete arrays
+            pass
         else:
             self._raise_parse_error(
                 "Expected ']' to close array",
@@ -665,7 +686,6 @@ def _parse_with_preprocessing(text: str, config: ParseConfig) -> Any:
     # Quick check: if text looks like valid JSON, try parsing directly first
     # This avoids infinite loops in preprocessing for already-valid JSON
     # But skip direct parsing if there are over-escaped sequences that need processing
-    import re
 
     has_over_escaped = bool(re.search(r'\\\\[nrtbf"\/]', text))
 
@@ -678,9 +698,8 @@ def _parse_with_preprocessing(text: str, config: ParseConfig) -> Any:
     ):
         try:
             # Try standard JSON parsing first for potentially valid input
-            import json
 
-            result = json.loads(text)
+            result = json.loads(text)  # Using json module imported at top
             # If successful, apply any post-processing hooks
             return result
         except (json.JSONDecodeError, ValueError):

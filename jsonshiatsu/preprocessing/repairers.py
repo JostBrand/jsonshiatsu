@@ -7,8 +7,11 @@ including missing commas, colons, unescaped strings, and incomplete objects.
 
 import re
 
+from ..core.array_object_handler import ArrayObjectHandler
+from ..core.string_preprocessors import StringPreprocessor
 from ..utils.config import PreprocessingConfig
-from .pipeline import PreprocessingStepBase
+from .base import PreprocessingStepBase
+from .string_utils import find_string_end_simple
 
 
 class StructureFixer(PreprocessingStepBase):
@@ -52,8 +55,6 @@ class StructureFixer(PreprocessingStepBase):
     @staticmethod
     def _fix_missing_values(text: str) -> str:
         """Fix missing values after colons."""
-        import re
-
         # Handle simple cases first: : followed directly by } or ,
         result = re.sub(r":\s*([},])", r": null\1", text)
 
@@ -63,8 +64,7 @@ class StructureFixer(PreprocessingStepBase):
         # Handle newline case more carefully - only if next non-empty line starts with } or ,
         # or if there's no next meaningful line
         lines = result.split("\n")
-        for i in range(len(lines)):
-            line = lines[i]
+        for i, line in enumerate(lines):
             # Look for lines ending with : followed by whitespace
             if re.search(r":\s*$", line):
                 # Check if next non-empty line has a value or is structural
@@ -73,7 +73,7 @@ class StructureFixer(PreprocessingStepBase):
                     next_line = lines[j].strip()
                     if not next_line:  # Empty line, continue
                         continue
-                    # If next line starts with a value (quote, number, boolean, etc) or string concatenation
+                    # If next line starts with a value or string concatenation
                     if (
                         next_line.startswith(('"', "'", "{", "["))
                         or re.match(r"^(true|false|null|\d)", next_line)
@@ -109,9 +109,12 @@ class StructureFixer(PreprocessingStepBase):
             current_line = line.rstrip()
             next_line = lines[i + 1].strip() if i + 1 < len(lines) else ""
 
-            if (current_line and next_line and
-                StructureFixer._needs_comma_between_lines(current_line, next_line) and
-                not current_line.endswith(",")):
+            if (
+                current_line
+                and next_line
+                and StructureFixer._needs_comma_between_lines(current_line, next_line)
+                and not current_line.endswith(",")
+            ):
                 # Add comma between these lines
                 current_line += ","
 
@@ -167,7 +170,7 @@ class StructureFixer(PreprocessingStepBase):
                 result.append(char)
                 i += 1
                 continue
-            elif in_string and char == string_char:
+            if in_string and char == string_char:
                 # Check if quote is properly escaped
                 escape_count = 0
                 j = i - 1
@@ -243,7 +246,7 @@ class StructureFixer(PreprocessingStepBase):
                 result.append(char)
                 i += 1
                 continue
-            elif in_string and char == string_char:
+            if in_string and char == string_char:
                 # Check if quote is properly escaped
                 escape_count = 0
                 j = i - 1
@@ -290,8 +293,6 @@ class StructureFixer(PreprocessingStepBase):
 
         # Use regex approach that's more precise - only match strings that are clearly
         # array elements (inside brackets, no colons between them)
-        import re
-
         # Pattern: [ ... "string1" whitespace "string2" ... ] where there's no comma between
         def add_comma_in_arrays(match: re.Match[str]) -> str:
             full_match = match.group(0)
@@ -311,18 +312,7 @@ class StructureFixer(PreprocessingStepBase):
     @staticmethod
     def _find_string_end_simple(text: str, start: int) -> int:
         """Find the end of a quoted string starting at position start."""
-        if start >= len(text) or text[start] != '"':
-            return -1
-
-        i = start + 1
-        while i < len(text):
-            if text[i] == '"' and (i == start + 1 or text[i - 1] != "\\"):
-                return i
-            elif text[i] == "\\" and i + 1 < len(text):
-                i += 2  # Skip escaped character
-            else:
-                i += 1
-        return -1
+        return find_string_end_simple(text, start)
 
     @staticmethod
     def _handle_incomplete_json(text: str) -> str:
@@ -334,11 +324,80 @@ class StructureFixer(PreprocessingStepBase):
         # Safety check: if text contains obvious malformed escapes, don't try to fix structure
         # This prevents infinite loops when processing strings with trailing backslashes
         # Odd number of quotes + malformed escapes = skip structural fixes
-        if (text.count('"') % 2 != 0 and "\\" in text and
-            (text.endswith('\\"') or '\\"' in text)):
+        if (
+            text.count('"') % 2 != 0
+            and "\\" in text
+            and (text.endswith('\\"') or '\\"' in text)
+        ):
             # Potentially malformed escape sequences, skip structural fixes
             return text
 
+        # First, handle unclosed strings before structural completion
+        # This ensures strings are closed properly before we add structural elements
+        in_string = False
+        string_char = None
+        i = 0
+
+        # First pass: detect if we have an unclosed string
+        while i < len(text):
+            char = text[i]
+            if not in_string and char in ['"', "'"]:
+                in_string = True
+                string_char = char
+            elif in_string and char == string_char:
+                # Check if quote is properly escaped
+                escape_count = 0
+                j = i - 1
+                while j >= 0 and text[j] == "\\":
+                    escape_count += 1
+                    j -= 1
+                if escape_count % 2 == 0:
+                    in_string = False
+                    string_char = None
+            i += 1
+
+        # Handle unclosed strings first - before structure completion
+        if in_string:
+            # We need to find where this unclosed string actually started
+            # Look backwards from the end to find the last quote that doesn't have a pair
+            pos = len(text) - 1
+            while pos >= 0:
+                if text[pos] == string_char and (pos == 0 or text[pos - 1] != "\\"):
+                    # Found unescaped quote - look for a good place to close this specific string
+                    # The content likely ends before any structural characters
+                    # For timestamps, look for common patterns
+                    close_pos = pos + 1
+                    content_end = close_pos
+
+                    # Scan forward to find reasonable content boundary
+                    while close_pos < len(text):
+                        char = text[close_pos]
+                        if char in ",\n}]":
+                            # Found structural character - content likely ends here
+                            content_end = (
+                                close_pos  # Don't include the structural character
+                            )
+                            break
+                        if char.isalnum() or char in ":+-TZ ":
+                            # Valid content character (timestamp-like, including spaces)
+                            content_end = close_pos + 1
+                        else:
+                            # Non-valid content character, stop here
+                            content_end = close_pos
+                            break
+                        close_pos += 1
+
+                    # Insert closing quote after the actual content
+                    text = (
+                        text[:content_end] + (string_char or '"') + text[content_end:]
+                    )
+                    break
+                pos -= 1
+            else:
+                # Couldn't find the start, just close at end
+                text += string_char or '"'
+
+        # After handling strings, handle structural completion
         # Track unclosed structures
         stack = []
         in_string = False
@@ -354,7 +413,6 @@ class StructureFixer(PreprocessingStepBase):
                 string_char = char
             elif in_string and char == string_char:
                 # Check if quote is properly escaped by counting preceding backslashes
-                # In JSON, \\ represents a literal backslash, so we need even/odd logic
                 escape_count = 0
                 j = i - 1
                 while j >= 0 and text[j] == "\\":
@@ -362,7 +420,6 @@ class StructureFixer(PreprocessingStepBase):
                     j -= 1
 
                 # If even number of backslashes, the quote is NOT escaped
-                # If odd number of backslashes, the quote IS escaped
                 if escape_count % 2 == 0:
                     in_string = False
                     string_char = None
@@ -385,53 +442,13 @@ class StructureFixer(PreprocessingStepBase):
         if stack:
             text += "".join(reversed(stack))
 
-        # Handle unclosed strings - be smarter about where to close
-        if in_string:
-            # We need to find where this unclosed string actually started
-            # Look backwards from the end to find the last quote that doesn't have a pair
-            pos = len(text) - 1
-            while pos >= 0:
-                if text[pos] == string_char and (pos == 0 or text[pos - 1] != "\\"):
-                    # Found unescaped quote - look for a good place to close this specific string
-                    # The content likely ends before any structural characters
-                    # For timestamps, look for common patterns
-                    close_pos = pos + 1
-                    content_end = close_pos
-
-                    # Scan forward to find reasonable content boundary
-                    while close_pos < len(text):
-                        char = text[close_pos]
-                        if char in ",\n}]":
-                            # Found structural character - content likely ends here
-                            break
-                        elif char.isalnum() or char in ":+-TZ":
-                            # Valid content character (timestamp-like)
-                            content_end = close_pos + 1
-                        close_pos += 1
-
-                    # Insert closing quote after the actual content
-                    text = (
-                        text[:content_end]
-                        + (string_char or '"')
-                        + text[content_end:]
-                    )
-                    break
-                pos -= 1
-            else:
-                # Couldn't find the start, just close at end
-                text += string_char or '"'
-
         return text
 
     @staticmethod
     def _handle_sparse_arrays(text: str) -> str:
         """Handle sparse arrays by replacing empty elements with null."""
-        import re
-
         # Use the existing ArrayObjectHandler logic which handles this correctly
         try:
-            from ..core.array_object_handler import ArrayObjectHandler
-
             return ArrayObjectHandler.handle_sparse_arrays(text)
         except ImportError:
             # Fallback implementation
@@ -478,34 +495,28 @@ class StringRepairer(PreprocessingStepBase):
             result = self._fix_unescaped_strings(result)
 
         if config.normalize_boolean_null:
-            result = self._normalize_boolean_null(result)
+            result = self.normalize_boolean_null(result)
 
         return result
 
     @staticmethod
     def _fix_multiline_strings(text: str) -> str:
         """Fix multiline strings by combining them properly."""
-        from ..core.string_preprocessors import StringPreprocessor
-
         return StringPreprocessor.fix_multiline_strings(text)
 
     @staticmethod
     def _fix_unescaped_quotes_in_strings(text: str) -> str:
         """Fix unescaped quotes within strings."""
-        from ..core.string_preprocessors import StringPreprocessor
-
         return StringPreprocessor.fix_unescaped_quotes_in_strings(text)
 
     @staticmethod
     def _fix_unescaped_strings(text: str) -> str:
         """Fix unescaped characters in strings."""
         # Use the comprehensive string preprocessing method
-        from ..core.string_preprocessors import StringPreprocessor
-
         return StringPreprocessor.fix_unescaped_strings(text)
 
     @staticmethod
-    def _normalize_boolean_null(text: str) -> str:
+    def normalize_boolean_null(text: str) -> str:
         """Normalize boolean and null values to JSON standard."""
         # Comprehensive boolean and null value replacements
         replacements = [

@@ -388,9 +388,8 @@ class ParseConfig:
         preprocessing_config = config_options.get("preprocessing_config")
         if preprocessing_config is not None:
             self.preprocessing_config = preprocessing_config
-        elif self.behavior.aggressive:
-            self.preprocessing_config = PreprocessingConfig.aggressive()
         else:
+            # Always use aggressive for now, but could be made conditional
             self.preprocessing_config = PreprocessingConfig.aggressive()
 
     # Backward compatibility properties

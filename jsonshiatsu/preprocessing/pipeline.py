@@ -9,6 +9,10 @@ from typing import Optional
 
 from ..core.interfaces import PreprocessingStep
 from ..utils.config import PreprocessingConfig
+from .extractors import ContentExtractor, MarkdownExtractor
+from .handlers import CommentHandler, JavaScriptHandler
+from .normalizers import QuoteNormalizer, WhitespaceNormalizer
+from .repairers import StringRepairer, StructureFixer
 
 
 class PreprocessingPipeline:
@@ -35,11 +39,6 @@ class PreprocessingPipeline:
     @classmethod
     def create_default_pipeline(cls) -> "PreprocessingPipeline":
         """Create a default preprocessing pipeline with standard steps."""
-        from .extractors import ContentExtractor, MarkdownExtractor
-        from .handlers import CommentHandler, JavaScriptHandler
-        from .normalizers import QuoteNormalizer, WhitespaceNormalizer
-        from .repairers import StringRepairer, StructureFixer
-
         pipeline = cls()
 
         # Content extraction steps
@@ -65,10 +64,6 @@ class PreprocessingPipeline:
     @classmethod
     def create_conservative_pipeline(cls) -> "PreprocessingPipeline":
         """Create a conservative preprocessing pipeline with minimal changes."""
-        from .extractors import MarkdownExtractor
-        from .handlers import CommentHandler
-        from .normalizers import QuoteNormalizer
-
         pipeline = cls()
         pipeline.add_step(MarkdownExtractor())
         pipeline.add_step(CommentHandler())
@@ -81,15 +76,3 @@ class PreprocessingPipeline:
         """Create an aggressive preprocessing pipeline with all repair steps."""
         # Same as default for now, but could be extended
         return cls.create_default_pipeline()
-
-
-class PreprocessingStepBase:
-    """Base class for preprocessing steps with common functionality."""
-
-    def should_apply(self, config: PreprocessingConfig) -> bool:
-        """Default implementation - always apply. Override in subclasses."""
-        return True
-
-    def process(self, text: str, config: PreprocessingConfig) -> str:
-        """Process the text. Must be implemented by subclasses."""
-        raise NotImplementedError("Subclasses must implement process()")

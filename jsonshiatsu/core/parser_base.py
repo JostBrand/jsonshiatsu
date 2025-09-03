@@ -32,7 +32,7 @@ class BaseParserMixin:
                 position = self.position
 
             return ErrorContextBuilder.build_context(position, original_text)
-        except Exception:
+        except (AttributeError, TypeError, ValueError):
             return ErrorContextBuilder.build_context(0, original_text)
 
     def create_error_reporter(

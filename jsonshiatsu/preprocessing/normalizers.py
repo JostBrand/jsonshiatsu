@@ -6,9 +6,11 @@ including quote types, whitespace, and boolean/null values.
 """
 
 import re
+from typing import Any, Optional
 
 from ..utils.config import PreprocessingConfig
-from .pipeline import PreprocessingStepBase
+from .base import PreprocessingStepBase
+from .string_utils import create_string_aware_processor
 
 
 class QuoteNormalizer(PreprocessingStepBase):
@@ -20,6 +22,8 @@ class QuoteNormalizer(PreprocessingStepBase):
 
     def process(self, text: str, config: PreprocessingConfig) -> str:
         """Normalize quotes in JSON text."""
+        if not config.normalize_quotes:
+            return text
         result = text
         result = self._normalize_quotes(result)
         result = self._quote_unquoted_keys(result)
@@ -177,67 +181,31 @@ class QuoteNormalizer(PreprocessingStepBase):
         while i < len(text):
             char = text[i]
 
-            # Track string state
-            if not in_string and char in ['"', "'"]:
-                in_string = True
-                string_char = char
-                result.append(char)
-                i += 1
-                continue
-            elif in_string and char == string_char and (i == 0 or text[i - 1] != "\\"):
-                in_string = False
-                string_char = None
-                result.append(char)
-                i += 1
-                continue
-            elif in_string:
-                # Inside a string - don't process keys
+            # Handle string state transitions
+            string_state_changed, new_i = QuoteNormalizer._handle_string_state(
+                text, i, in_string, string_char
+            )
+            if string_state_changed and new_i is not None:
+                in_string, string_char, i = new_i
                 result.append(char)
                 i += 1
                 continue
 
-            # Only look for unquoted keys when outside strings
-            if char.isalpha() or char == "_" or char == "\\":
-                # Potential start of unquoted key (including Unicode escapes)
-                start = i
+            if in_string:
+                result.append(char)
+                i += 1
+                continue
 
-                # Handle Unicode escape sequences at start of key
-                if char == "\\" and i + 1 < len(text) and text[i + 1] == "u":
-                    # Skip Unicode escape sequences in the key
-                    while i < len(text):
-                        if text[i] == "\\" and i + 5 < len(text) and text[i + 1] == "u":
-                            # Skip \uXXXX
-                            i += 6
-                        elif text[i].isalnum() or text[i] == "_":
-                            i += 1
-                        else:
-                            break
+            # Process potential unquoted keys
+            if QuoteNormalizer._is_potential_key_start(char):
+                key_info = QuoteNormalizer._extract_key_candidate(text, i)
+                if key_info and QuoteNormalizer._should_quote_key(key_info["key"]):
+                    result.append(f'"{key_info["key"]}"')
+                    result.append(key_info["whitespace"])
+                    i = key_info["colon_pos"]
                 else:
-                    # Collect the identifier (regular ASCII)
-                    while i < len(text) and (text[i].isalnum() or text[i] == "_"):
-                        i += 1
-
-                # Skip whitespace
-                j = i
-                while j < len(text) and text[j].isspace():
-                    j += 1
-
-                # Check if followed by colon
-                if j < len(text) and text[j] == ":":
-                    key = text[start:i]
-                    # Don't quote if it's a boolean, null, or number
-                    if (
-                        key.lower() not in ["true", "false", "null"]
-                        and not key.isdigit()
-                    ):
-                        result.append(f'"{key}"')
-                        # Add any whitespace that was skipped
-                        result.append(text[i:j])
-                        i = j
-                    else:
-                        result.append(text[start:i])
-                else:
-                    result.append(text[start:i])
+                    result.append(char)
+                    i += 1
             else:
                 result.append(char)
                 i += 1
@@ -245,47 +213,85 @@ class QuoteNormalizer(PreprocessingStepBase):
         return "".join(result)
 
     @staticmethod
+    def _handle_string_state(
+        text: str, pos: int, in_string: bool, string_char: Optional[str]
+    ) -> tuple[bool, Optional[tuple[bool, Optional[str], int]]]:
+        """Handle string state transitions. Returns (changed, new_state)."""
+        char = text[pos]
+
+        if not in_string and char in ['"', "'"]:
+            return True, (True, char, pos)
+        if in_string and char == string_char and (pos == 0 or text[pos - 1] != "\\"):
+            return True, (False, None, pos)
+
+        return False, None
+
+    @staticmethod
+    def _is_potential_key_start(char: str) -> bool:
+        """Check if character could start an unquoted key."""
+        return char.isalpha() or char == "_" or char == "\\"
+
+    @staticmethod
+    def _extract_key_candidate(text: str, start: int) -> Optional[dict[str, Any]]:
+        """Extract a potential key and check if it's followed by a colon."""
+        char = text[start]
+        i = start
+
+        # Handle Unicode escapes
+        if char == "\\" and i + 1 < len(text) and text[i + 1] == "u":
+            i = QuoteNormalizer._skip_unicode_sequences(text, i)
+        else:
+            # Regular identifier
+            while i < len(text) and (text[i].isalnum() or text[i] == "_"):
+                i += 1
+
+        # Skip whitespace to find colon
+        j = i
+        while j < len(text) and text[j].isspace():
+            j += 1
+
+        # Check for colon
+        if j < len(text) and text[j] == ":":
+            return {"key": text[start:i], "whitespace": text[i:j], "colon_pos": j}
+        return None
+
+    @staticmethod
+    def _skip_unicode_sequences(text: str, start: int) -> int:
+        """Skip Unicode escape sequences in key."""
+        i = start
+        while i < len(text):
+            if text[i] == "\\" and i + 5 < len(text) and text[i + 1] == "u":
+                i += 6  # Skip \uXXXX
+            elif text[i].isalnum() or text[i] == "_":
+                i += 1
+            else:
+                break
+        return i
+
+    @staticmethod
+    def _should_quote_key(key: str) -> bool:
+        """Determine if a key should be quoted."""
+        return key.lower() not in ["true", "false", "null"] and not key.isdigit()
+
+    @staticmethod
     def _quote_unquoted_values(text: str) -> str:
         """Add quotes to unquoted string values."""
-        result = []
-        i = 0
-        in_string = False
-        string_char = None
+        processor = create_string_aware_processor()
 
-        while i < len(text):
-            char = text[i]
-
-            # Track string state
-            if not in_string and char in ['"', "'"]:
-                in_string = True
-                string_char = char
-                result.append(char)
-                i += 1
-                continue
-            elif in_string and char == string_char and (i == 0 or text[i - 1] != "\\"):
-                in_string = False
-                string_char = None
-                result.append(char)
-                i += 1
-                continue
-            elif in_string:
-                # Inside a string - don't process colons
-                result.append(char)
-                i += 1
-                continue
-
-            # Only process colons when outside strings
+        def process_outside_strings(
+            text: str, i: int, char: str
+        ) -> Optional[tuple[str, int]]:
+            """Process characters outside strings."""
             if char == ":":
-                result.append(char)
+                result_part = char
                 i += 1
-
                 # Skip whitespace
                 while i < len(text) and text[i].isspace():
-                    result.append(text[i])
+                    result_part += text[i]
                     i += 1
 
                 # Check if next token needs quoting
-                if i < len(text) and QuoteNormalizer._should_quote_value(text, i):
+                if i < len(text) and QuoteNormalizer._should_quote_at_position(text, i):
                     # Find the end of the unquoted value
                     start = i
                     while (
@@ -294,40 +300,24 @@ class QuoteNormalizer(PreprocessingStepBase):
                         i += 1
 
                     value = text[start:i]
-                    if (
-                        value
-                        and not value.startswith(('"', "'"))
-                        and value.lower()
-                        not in [
-                            "true",
-                            "false",
-                            "null",
-                            "none",
-                            "yes",
-                            "no",
-                            "undefined",
-                        ]
-                        and not QuoteNormalizer._is_valid_number(value)
-                        and not value.startswith(("[", "{"))
-                        and "://" not in value
-                        and not ("(" in value and ")" in value)
-                        and not any(f" {op} " in value for op in ["+", "-", "*", "/"])
-                    ):
-                        result.append(f'"{value}"')
+                    if QuoteNormalizer._should_quote_value(value):
+                        result_part += f'"{value}"'
                     else:
-                        result.append(value)
-                else:
-                    if i < len(text):
-                        result.append(text[i])
-                        i += 1
-            else:
-                result.append(char)
-                i += 1
+                        result_part += value
 
-        return "".join(result)
+                    return result_part, i
+
+                if i < len(text):
+                    result_part += text[i]
+                    i += 1
+                return result_part, i
+
+            return None  # Use default character handling
+
+        return processor(text, process_outside_strings, None)
 
     @staticmethod
-    def _should_quote_value(text: str, pos: int) -> bool:
+    def _should_quote_at_position(text: str, pos: int) -> bool:
         """Check if a value at position should be quoted."""
         if pos >= len(text):
             return False
@@ -351,6 +341,24 @@ class QuoteNormalizer(PreprocessingStepBase):
         return char not in "[{"
 
     @staticmethod
+    def _should_quote_value(value: str) -> bool:
+        """Check if a value should be quoted based on its content."""
+        # List of conditions where we should NOT quote
+        no_quote_conditions = [
+            not value,  # Empty value
+            value.startswith(('"', "'")),  # Already quoted
+            value.lower()
+            in ["true", "false", "null", "none", "yes", "no", "undefined"],
+            QuoteNormalizer._is_valid_number(value),  # Numbers
+            value.startswith(("[", "{")),  # Arrays or objects
+            "://" in value,  # URLs
+            "(" in value and ")" in value,  # Function-like expressions
+            any(f" {op} " in value for op in ["+", "-", "*", "/"]),  # Math expressions
+        ]
+
+        return not any(no_quote_conditions)
+
+    @staticmethod
     def _quote_unquoted_values_safe(text: str) -> str:
         """Add quotes to unquoted string values with proper string boundary awareness."""
 
@@ -359,40 +367,10 @@ class QuoteNormalizer(PreprocessingStepBase):
             colon_and_whitespace = match.group(1)  # The ": " part
             value = match.group(2)  # The unquoted value
 
-            # Don't quote if already quoted
-            if value.startswith(('"', "'")):
-                return match.group(0)
-
-            # Don't quote booleans, null, numbers
-            if value.lower() in [
-                "true",
-                "false",
-                "null",
-                "none",
-                "yes",
-                "no",
-                "undefined",
-            ] or QuoteNormalizer._is_valid_number(value):
-                return match.group(0)
-
-            # Don't quote arrays or objects
-            if value.startswith(("[", "{")):
-                return match.group(0)
-
-            # Don't quote URLs
-            if "://" in value:
-                return match.group(0)
-
-            # Don't quote function calls
-            if "(" in value and ")" in value:
-                return match.group(0)
-
-            # Don't quote expressions with spaced operators
-            if any(f" {op} " in value for op in ["+", "-", "*", "/"]):
-                return match.group(0)
-
-            # Quote simple unquoted values
-            return f'{colon_and_whitespace}"{value}"'
+            # Check if we should quote this value
+            if QuoteNormalizer._should_quote_value(value):
+                return f'{colon_and_whitespace}"{value}"'
+            return match.group(0)
 
         # More conservative pattern: only match colons that are clearly JSON key-value separators
         # Use negative lookbehind to avoid timestamp colons (digit:digit patterns)
@@ -424,39 +402,25 @@ class QuoteNormalizer(PreprocessingStepBase):
 
         char = text[pos]
 
-        # Already quoted
-        if char in ['"', "'"]:
+        # Quick character-based checks first
+        no_quote_chars = ['"', "'", "[", "{"] + list("0123456789.-+")
+        if char in no_quote_chars:
             return False
-
-        # Boolean or null
+        # Check for keywords at this position
         if text[pos:].startswith(("true", "false", "null")):
             return False
 
-        # Number (including scientific notation)
-        if char.isdigit() or char in ".-+":
-            return False
-
-        # Array or object
-        if char in "[{":
-            return False
-
-        # Check if this looks like a URL or other complex pattern that should not be quoted
-        # Look ahead to see the full value
+        # For complex patterns, extract the full value
         value_end = QuoteNormalizer._find_unquoted_value_end(text, pos)
         value = text[pos:value_end]
 
-        # Don't quote URLs
-        if "://" in value:
-            return False
-
-        # Don't quote function calls
-        if "(" in value and ")" in value:
-            return False
-
-        # Don't quote complex expressions with operators (but allow simple values with dashes like model names)
-        # Only avoid quoting if there are spaces around operators (indicating expressions)
-        # Looks like a simple unquoted string value
-        return not any(f" {op} " in value for op in ["+", "-", "*", "/"])
+        # List of patterns that should not be quoted
+        complex_patterns = [
+            "://" in value,  # URLs
+            "(" in value and ")" in value,  # Function calls
+            any(f" {op} " in value for op in ["+", "-", "*", "/"]),  # Math expressions
+        ]
+        return not any(complex_patterns)
 
     @staticmethod
     def _find_unquoted_value_end(text: str, start: int) -> int:
@@ -470,56 +434,34 @@ class QuoteNormalizer(PreprocessingStepBase):
 class WhitespaceNormalizer(PreprocessingStepBase):
     """Normalizes whitespace while preserving JSON structure."""
 
-    def should_apply(self, config: PreprocessingConfig) -> bool:
+    def should_apply(self, _config: PreprocessingConfig) -> bool:
         """Always apply whitespace normalization."""
         return True
 
-    def process(self, text: str, config: PreprocessingConfig) -> str:
+    def process(self, text: str, _config: PreprocessingConfig) -> str:
         """Normalize whitespace in JSON text."""
         return self._normalize_whitespace(text)
 
     @staticmethod
     def _normalize_whitespace(text: str) -> str:
         """Normalize excessive whitespace while preserving JSON structure."""
-        result = []
-        i = 0
-        in_string = False
-        string_char = None
+        processor = create_string_aware_processor()
 
-        while i < len(text):
-            char = text[i]
-
-            # Track string state
-            if not in_string and char in ['"', "'"]:
-                in_string = True
-                string_char = char
-                result.append(char)
-                i += 1
-                continue
-            elif in_string and char == string_char and (i == 0 or text[i - 1] != "\\"):
-                in_string = False
-                string_char = None
-                result.append(char)
-                i += 1
-                continue
-            elif in_string:
-                result.append(char)
-                i += 1
-                continue
-
-            # Handle whitespace outside strings
+        def process_outside_strings(
+            text: str, i: int, char: str
+        ) -> Optional[tuple[str, int]]:
+            """Process characters outside strings."""
             if char.isspace():
                 # Collapse multiple whitespace to single space
-                result.append(" ")
+                result_part = " "
                 while i + 1 < len(text) and text[i + 1].isspace():
                     i += 1
                 i += 1
-            else:
-                result.append(char)
-                i += 1
+                return result_part, i
+            return None  # Use default character handling
 
-        # Clean up extra spaces around structural characters
-        text_result = "".join(result)
+        # Process with string awareness
+        text_result = processor(text, process_outside_strings, None)
 
         # Remove spaces around structural characters
         for chars in [

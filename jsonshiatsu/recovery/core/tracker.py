@@ -121,14 +121,13 @@ class ErrorTracker:
         """Determine error category from message."""
         if "quote" in message.lower():
             return "quote_issues"
-        elif "comma" in message.lower():
+        if "comma" in message.lower():
             return "comma_issues"
-        elif "bracket" in message.lower() or "brace" in message.lower():
+        if "bracket" in message.lower() or "brace" in message.lower():
             return "structure_issues"
-        elif "string" in message.lower():
+        if "string" in message.lower():
             return "string_issues"
-        else:
-            return "other"
+        return "other"
 
     def _get_common_errors(self, limit: int = 5) -> list[str]:
         """Get the most common error messages."""

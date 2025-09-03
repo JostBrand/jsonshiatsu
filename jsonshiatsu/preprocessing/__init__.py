@@ -6,6 +6,7 @@ malformed JSON text before parsing. The preprocessing is broken down into focuse
 single-responsibility components that can be composed into a pipeline.
 """
 
+from .base import PreprocessingStepBase
 from .extractors import ContentExtractor, MarkdownExtractor
 from .handlers import CommentHandler, JavaScriptHandler
 from .normalizers import QuoteNormalizer, WhitespaceNormalizer
@@ -14,6 +15,7 @@ from .repairers import StringRepairer, StructureFixer
 
 __all__ = [
     "PreprocessingPipeline",
+    "PreprocessingStepBase",
     "MarkdownExtractor",
     "ContentExtractor",
     "QuoteNormalizer",

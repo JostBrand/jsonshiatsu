@@ -17,15 +17,12 @@ class TokenHandler(Protocol):
 
     def current_token(self) -> Token:
         """Get the current token without advancing."""
-        ...
 
     def advance(self) -> None:
         """Move to the next token in the stream."""
-        ...
 
     def skip_whitespace_and_newlines(self) -> None:
         """Skip whitespace and newline tokens."""
-        ...
 
 
 class StructureValidator(Protocol):
@@ -33,11 +30,9 @@ class StructureValidator(Protocol):
 
     def validate_and_enter_structure(self, validator: Any) -> None:
         """Validate and enter a new structural level (object/array)."""
-        ...
 
     def validate_and_exit_structure(self, validator: Any) -> None:
         """Validate and exit the current structural level."""
-        ...
 
 
 class ParseStrategy(ABC):
@@ -46,17 +41,14 @@ class ParseStrategy(ABC):
     @abstractmethod
     def parse_value(self, handler: TokenHandler) -> Any:
         """Parse any JSON value (string, number, boolean, null, object, array)."""
-        pass
 
     @abstractmethod
     def parse_object(self, handler: TokenHandler) -> dict[str, Any]:
         """Parse a JSON object."""
-        pass
 
     @abstractmethod
     def parse_array(self, handler: TokenHandler) -> list[Any]:
         """Parse a JSON array."""
-        pass
 
 
 class PreprocessingStep(Protocol):
@@ -64,11 +56,9 @@ class PreprocessingStep(Protocol):
 
     def process(self, text: str, config: Any) -> str:
         """Process the input text according to this preprocessing step."""
-        ...
 
     def should_apply(self, config: Any) -> bool:
         """Determine if this step should be applied given the configuration."""
-        ...
 
 
 class ErrorReporter(Protocol):
@@ -76,11 +66,9 @@ class ErrorReporter(Protocol):
 
     def report_error(self, message: str, position: int, context: str) -> None:
         """Report a parsing error with context."""
-        ...
 
     def create_parse_error(self, message: str, position: int) -> ParseError:
         """Create a ParseError with appropriate context."""
-        ...
 
 
 class RecoveryStrategy(Protocol):
@@ -88,8 +76,6 @@ class RecoveryStrategy(Protocol):
 
     def can_recover(self, error: ParseError, context: Any) -> bool:
         """Determine if recovery is possible for the given error."""
-        ...
 
     def attempt_recovery(self, error: ParseError, context: Any) -> Any:
         """Attempt to recover from the error and return a result."""
-        ...

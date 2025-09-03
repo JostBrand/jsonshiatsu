@@ -10,12 +10,13 @@ import warnings
 from typing import Any, Optional
 
 from ..preprocessing import PreprocessingPipeline
-from ..preprocessing.extractors import MarkdownExtractor
-from ..preprocessing.handlers import CommentHandler
+from ..preprocessing.extractors import ContentExtractor, MarkdownExtractor
+from ..preprocessing.handlers import CommentHandler, JavaScriptHandler
 from ..preprocessing.normalizers import QuoteNormalizer, WhitespaceNormalizer
-from ..preprocessing.repairers import StructureFixer
+from ..preprocessing.repairers import StringRepairer, StructureFixer
 from ..utils.config import PreprocessingConfig
 from .array_object_handler import ArrayObjectHandler
+from .string_preprocessors import StringPreprocessor
 
 
 class JSONPreprocessor:
@@ -46,10 +47,11 @@ class JSONPreprocessor:
             Cleaned JSON string
         """
         if config is None:
-            if aggressive:
-                config = PreprocessingConfig.aggressive()
-            else:
-                config = PreprocessingConfig.aggressive()  # New default
+            config = (
+                PreprocessingConfig.aggressive()
+                if aggressive
+                else PreprocessingConfig.conservative()
+            )
 
         # Create processor and apply pipeline
         processor = cls()
@@ -164,10 +166,8 @@ class JSONPreprocessor:
     @staticmethod
     def extract_first_json(text: str) -> str:
         """Extract the first JSON structure from text."""
-        from ..preprocessing.extractors import ContentExtractor
-
         extractor = ContentExtractor()
-        return extractor._extract_first_json(text)
+        return extractor.extract_first_json(text)
 
     @staticmethod
     def normalize_boolean_null(text: str) -> str:
@@ -178,10 +178,8 @@ class JSONPreprocessor:
             DeprecationWarning,
             stacklevel=2,
         )
-        from ..preprocessing.repairers import StringRepairer
-
         repairer = StringRepairer()
-        return repairer._normalize_boolean_null(text)
+        return repairer.normalize_boolean_null(text)
 
     @staticmethod
     def unwrap_function_calls(text: str) -> str:
@@ -192,8 +190,6 @@ class JSONPreprocessor:
             DeprecationWarning,
             stacklevel=2,
         )
-        from ..preprocessing.handlers import JavaScriptHandler
-
         handler = JavaScriptHandler()
         config = PreprocessingConfig()
         return handler.process(text, config)
@@ -207,8 +203,6 @@ class JSONPreprocessor:
             DeprecationWarning,
             stacklevel=2,
         )
-        from ..core.string_preprocessors import StringPreprocessor
-
         return StringPreprocessor.fix_unescaped_strings(text)
 
     @staticmethod
@@ -220,7 +214,5 @@ class JSONPreprocessor:
             DeprecationWarning,
             stacklevel=2,
         )
-        from ..preprocessing.extractors import ContentExtractor
-
         extractor = ContentExtractor()
-        return extractor._remove_trailing_text(text)
+        return extractor.remove_trailing_text(text)

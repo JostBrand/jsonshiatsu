@@ -107,8 +107,8 @@ class ArrayObjectHandler:
                 null_count = len(commas) - 1  # n commas = (n-1) missing values
                 if null_count > 0:
                     return "," + ",".join(["null"] * null_count) + ","
-                else:
-                    return commas  # Single comma, no change
+
+                return commas  # Single comma, no change
 
             # Replace sequences of 2 or more consecutive commas
             array_content = re.sub(r",{2,}", replace_consecutive_commas, array_content)

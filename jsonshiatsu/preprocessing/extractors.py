@@ -8,7 +8,7 @@ various text formats like markdown code blocks and mixed content.
 import re
 
 from ..utils.config import PreprocessingConfig
-from .pipeline import PreprocessingStepBase
+from .base import PreprocessingStepBase
 
 
 class MarkdownExtractor(PreprocessingStepBase):
@@ -20,6 +20,8 @@ class MarkdownExtractor(PreprocessingStepBase):
 
     def process(self, text: str, config: PreprocessingConfig) -> str:
         """Extract JSON from markdown code blocks."""
+        if not config.extract_from_markdown:
+            return text
         return self._extract_from_code_blocks(text)
 
     @staticmethod
@@ -55,15 +57,15 @@ class ContentExtractor(PreprocessingStepBase):
         result = text
 
         if config.extract_first_json:
-            result = self._extract_first_json(result)
+            result = self.extract_first_json(result)
 
         if config.remove_trailing_text:
-            result = self._remove_trailing_text(result)
+            result = self.remove_trailing_text(result)
 
         return result
 
     @staticmethod
-    def _extract_first_json(text: str) -> str:
+    def extract_first_json(text: str) -> str:
         """Extract the first JSON-like structure from text."""
         text = text.strip()
         if not text:
@@ -118,7 +120,7 @@ class ContentExtractor(PreprocessingStepBase):
         return text[start_pos:]
 
     @staticmethod
-    def _remove_trailing_text(text: str) -> str:
+    def remove_trailing_text(text: str) -> str:
         """Remove trailing text after JSON content."""
         text = text.strip()
         if not text:
@@ -159,5 +161,4 @@ class ContentExtractor(PreprocessingStepBase):
 
         if last_json_pos != -1:
             return text[: last_json_pos + 1]
-        else:
-            return text
+        return text

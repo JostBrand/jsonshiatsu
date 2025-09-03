@@ -8,7 +8,8 @@ like comments and JavaScript constructs that need to be cleaned or transformed.
 import re
 
 from ..utils.config import PreprocessingConfig
-from .pipeline import PreprocessingStepBase
+from .base import PreprocessingStepBase
+from .string_utils import find_string_end_simple
 
 
 class CommentHandler(PreprocessingStepBase):
@@ -20,11 +21,14 @@ class CommentHandler(PreprocessingStepBase):
 
     def process(self, text: str, config: PreprocessingConfig) -> str:
         """Remove comments from JSON text."""
+        if not config.remove_comments:
+            return text
         return self._remove_comments(text)
 
     @staticmethod
     def _remove_comments(text: str) -> str:
         """Remove single-line and multi-line comments from JSON."""
+        # Use a simple approach for comment removal since it needs access to result list
         result = []
         i = 0
         in_string = False
@@ -41,13 +45,13 @@ class CommentHandler(PreprocessingStepBase):
                 result.append(char)
                 i += 1
                 continue
-            elif in_string and char == string_char and (i == 0 or text[i - 1] != "\\"):
+            if in_string and char == string_char and (i == 0 or text[i - 1] != "\\"):
                 in_string = False
                 string_char = None
                 result.append(char)
                 i += 1
                 continue
-            elif in_string:
+            if in_string:
                 result.append(char)
                 i += 1
                 continue
@@ -92,6 +96,8 @@ class JavaScriptHandler(PreprocessingStepBase):
 
     def process(self, text: str, config: PreprocessingConfig) -> str:
         """Handle JavaScript constructs in JSON text."""
+        if not config.unwrap_function_calls:
+            return text
         result = text
         result = self._remove_function_definitions(result)
         result = self._handle_javascript_constructs(result)
@@ -318,8 +324,6 @@ class JavaScriptHandler(PreprocessingStepBase):
             def handle_paren_concatenation(match: re.Match[str]) -> str:
                 content = match.group(1)
                 # Extract all quoted strings and concatenate them
-                import re
-
                 strings = re.findall(r'"([^"]*)"', content)
                 if strings:
                     combined = "".join(strings)
@@ -434,7 +438,7 @@ class JavaScriptHandler(PreprocessingStepBase):
                             # - After colon (object value): "key": "str1" "str2"
                             # - But NOT after comma (array element): , "str1" "str2"
                             # - And NOT after opening bracket: [ "str1" "str2"
-                            # - And NOT if string2 is followed by colon (string2 is a key): "str1" "key":
+                            # - NOT if string2 is followed by colon (string2 is a key):
                             if (
                                 ":" in context
                                 and not context.strip().endswith(",")
@@ -454,28 +458,18 @@ class JavaScriptHandler(PreprocessingStepBase):
                     result.append(string1)
                     i = string1_end + 1
                     continue
-                else:
-                    # Couldn't find string end - just add the character
-                    result.append(char)
-                    i += 1
-            else:
+
+                # Couldn't find string end - just add the character
                 result.append(char)
                 i += 1
+                continue
+
+            result.append(char)
+            i += 1
 
         return "".join(result)
 
     @staticmethod
     def _find_string_end_simple(text: str, start: int) -> int:
         """Find the end of a quoted string starting at position start."""
-        if start >= len(text) or text[start] != '"':
-            return -1
-
-        i = start + 1
-        while i < len(text):
-            if text[i] == '"' and (i == start + 1 or text[i - 1] != "\\"):
-                return i
-            elif text[i] == "\\" and i + 1 < len(text):
-                i += 2  # Skip escaped character
-            else:
-                i += 1
-        return -1
+        return find_string_end_simple(text, start)

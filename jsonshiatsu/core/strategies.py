@@ -44,13 +44,13 @@ class AbstractParsingStrategy(ParseStrategy):
         if token.type == TokenType.STRING:
             handler.advance()
             return self._process_string_value(token.value), True
-        elif token.type == TokenType.NUMBER:
+        if token.type == TokenType.NUMBER:
             handler.advance()
             return self._process_number_value(token.value), True
-        elif token.type == TokenType.BOOLEAN:
+        if token.type == TokenType.BOOLEAN:
             handler.advance()
             return token.value.lower() == "true", True
-        elif token.type == TokenType.NULL:
+        if token.type == TokenType.NULL:
             handler.advance()
             return None, True
 
@@ -60,10 +60,11 @@ class AbstractParsingStrategy(ParseStrategy):
         """Handle object and array tokens."""
         if token.type == TokenType.LBRACE:
             return self.parse_object(handler)
-        elif token.type == TokenType.LBRACKET:
+        if token.type == TokenType.LBRACKET:
             return self.parse_array(handler)
-        else:
-            self._raise_unexpected_token_error(token)
+
+        self._raise_unexpected_token_error(token)
+        return None  # Add explicit return for consistency
 
     def parse_object(self, handler: TokenHandler) -> dict[str, Any]:
         """Parse a JSON object using template method."""
@@ -94,34 +95,28 @@ class AbstractParsingStrategy(ParseStrategy):
     @abstractmethod
     def _process_string_value(self, value: str) -> str:
         """Process a string value (may differ between strategies)."""
-        pass
 
     @abstractmethod
     def _process_number_value(self, value: str) -> Union[int, float]:
         """Process a number value (may differ between strategies)."""
-        pass
 
     @abstractmethod
     def _init_empty_object(self) -> dict[str, Any]:
         """Initialize an empty object (may differ for memory optimization)."""
-        pass
 
     @abstractmethod
     def _init_empty_array(self) -> list[Any]:
         """Initialize an empty array (may differ for memory optimization)."""
-        pass
 
     @abstractmethod
     def _parse_object_content(
         self, handler: TokenHandler, obj: dict[str, Any]
     ) -> dict[str, Any]:
         """Parse object content (implementations may optimize differently)."""
-        pass
 
     @abstractmethod
     def _parse_array_content(self, handler: TokenHandler, arr: list[Any]) -> list[Any]:
         """Parse array content (implementations may optimize differently)."""
-        pass
 
     # Common helper methods
 
@@ -229,7 +224,7 @@ class StandardParsingStrategy(AbstractParsingStrategy):
             if next_token.type == TokenType.RBRACE:
                 handler.advance()
                 break
-            elif next_token.type == TokenType.COMMA:
+            if next_token.type == TokenType.COMMA:
                 handler.advance()
                 handler.skip_whitespace_and_newlines()
             else:
@@ -253,7 +248,7 @@ class StandardParsingStrategy(AbstractParsingStrategy):
             if next_token.type == TokenType.RBRACKET:
                 handler.advance()
                 break
-            elif next_token.type == TokenType.COMMA:
+            if next_token.type == TokenType.COMMA:
                 handler.advance()
                 handler.skip_whitespace_and_newlines()
             else:
@@ -340,7 +335,7 @@ class StreamingParsingStrategy(AbstractParsingStrategy):
             if next_token.type == TokenType.RBRACE:
                 handler.advance()
                 break
-            elif next_token.type == TokenType.COMMA:
+            if next_token.type == TokenType.COMMA:
                 handler.advance()
                 handler.skip_whitespace_and_newlines()
             else:
@@ -362,7 +357,7 @@ class StreamingParsingStrategy(AbstractParsingStrategy):
             if next_token.type == TokenType.RBRACKET:
                 handler.advance()
                 break
-            elif next_token.type == TokenType.COMMA:
+            if next_token.type == TokenType.COMMA:
                 handler.advance()
                 handler.skip_whitespace_and_newlines()
             else:

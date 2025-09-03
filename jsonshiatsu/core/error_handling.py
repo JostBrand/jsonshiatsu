@@ -103,7 +103,7 @@ class ErrorContextBuilder:
             # Try to get position from current token
             token = handler.current_token()
             position = getattr(token, "position", 0)
-        except Exception:
+        except (AttributeError, TypeError, ValueError):
             position = 0
 
         return ErrorContextBuilder.build_context(position, original_text)
@@ -116,7 +116,7 @@ class ErrorReporterImpl:
         self.original_text = original_text
         self.include_context = include_context
 
-    def report_error(self, message: str, position: int, context: str = "") -> None:
+    def report_error(self, _message: str, position: int, context: str = "") -> None:
         """Report a parsing error (for logging/debugging)."""
         if self.include_context and not context and self.original_text:
             error_context = ErrorContextBuilder.build_context(
@@ -125,7 +125,7 @@ class ErrorReporterImpl:
             context = f"Line {error_context.line}, Column {error_context.column}"
 
         # This could be extended to log to a logger
-        pass
+        # For now, we simply acknowledge the error without action
 
     def create_parse_error(self, message: str, position: int) -> ParseError:
         """Create a ParseError with appropriate context."""
