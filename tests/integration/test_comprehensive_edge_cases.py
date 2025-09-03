@@ -59,7 +59,6 @@ class TestSparseArraysComprehensive(unittest.TestCase):
         }
         self.assertEqual(result, expected)
 
-    @unittest.skip("Temporarily disabled - causes infinite loop, needs investigation")
     def test_sparse_arrays_with_other_malformed_patterns(self) -> None:
         """Test sparse arrays combined with other malformed JSON."""
         complex_sparse = """{
@@ -77,14 +76,39 @@ class TestSparseArraysComprehensive(unittest.TestCase):
 
         result = jsonshiatsu.loads(complex_sparse)
 
-        # Verify structure
+        # Expected complete result
+        expected = {
+            "languages": ["en", None, "de", "fr"],
+            "users": [
+                {"name": "John", "age": 30},
+                {"name": "Jane", "age": 25}
+            ],
+            "settings": {
+                "flags": [True, None, False],
+                "theme": "dark"
+            }
+        }
+
+        self.assertEqual(result, expected)
+
+        # Also verify structure separately for clarity
         self.assertIn("languages", result)
         self.assertIn("users", result)
         self.assertIn("settings", result)
 
-        # Verify sparse arrays
+        # Verify sparse arrays specifically
         self.assertEqual(result["languages"], ["en", None, "de", "fr"])
         self.assertEqual(result["settings"]["flags"], [True, None, False])
+
+        # Verify that objects within arrays were parsed correctly despite sparse elements
+        self.assertEqual(len(result["users"]), 2)
+        self.assertEqual(result["users"][0]["name"], "John")
+        self.assertEqual(result["users"][0]["age"], 30)
+        self.assertEqual(result["users"][1]["name"], "Jane")
+        self.assertEqual(result["users"][1]["age"], 25)
+
+        # Verify unquoted values were handled
+        self.assertEqual(result["settings"]["theme"], "dark")
 
 
 class TestEscapeSequenceComprehensive(unittest.TestCase):
