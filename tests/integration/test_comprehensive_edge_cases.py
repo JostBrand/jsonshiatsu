@@ -79,14 +79,8 @@ class TestSparseArraysComprehensive(unittest.TestCase):
         # Expected complete result
         expected = {
             "languages": ["en", None, "de", "fr"],
-            "users": [
-                {"name": "John", "age": 30},
-                {"name": "Jane", "age": 25}
-            ],
-            "settings": {
-                "flags": [True, None, False],
-                "theme": "dark"
-            }
+            "users": [{"name": "John", "age": 30}, {"name": "Jane", "age": 25}],
+            "settings": {"flags": [True, None, False], "theme": "dark"},
         }
 
         self.assertEqual(result, expected)
