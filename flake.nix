@@ -38,6 +38,7 @@
             mypy
             ruff
             build
+            regex
           ]
         );
 
